@@ -32,9 +32,10 @@ class GuestResponseController extends Controller
                 'attending_guests' => (int) $invitation->rsvpResponses()->where('attendance', 'attending')->sum('pax'),
                 'attending_replies' => $invitation->rsvpResponses()->where('attendance', 'attending')->count(),
                 'not_attending_replies' => $invitation->rsvpResponses()->where('attendance', 'not_attending')->count(),
+                'not_attending_guests' => (int) $invitation->rsvpResponses()->where('attendance', 'not_attending')->sum('pax'),
                 'wishes_total' => $invitation->wishes()->count(),
             ],
-            'rsvps' => $rsvps->limit(self::LIST_LIMIT)->get(['id', 'guest_name', 'attendance', 'pax', 'contact', 'notes', 'created_at']),
+            'rsvps' => $rsvps->limit(self::LIST_LIMIT)->get(['id', 'guest_name', 'attendance', 'pax', 'event_title', 'contact', 'notes', 'created_at']),
             'wishes' => $wishes->limit(self::LIST_LIMIT)->get(['id', 'name', 'message', 'created_at']),
         ]]);
     }
@@ -48,12 +49,13 @@ class GuestResponseController extends Controller
         $text = fn (?string $value): string => SimpleXLSXGen::raw((string) $value);
         $when = fn ($date): string => $date?->timezone('Asia/Kuala_Lumpur')->format('d/m/Y H:i') ?? '';
 
-        $rsvpRows = [['<b>Nama tetamu</b>', '<b>Kehadiran</b>', '<b>Bilangan tetamu</b>', '<b>Telefon / emel</b>', '<b>Catatan</b>', '<b>Dihantar pada</b>']];
+        $rsvpRows = [['<b>Nama tetamu</b>', '<b>Kehadiran</b>', '<b>Bilangan tetamu</b>', '<b>Acara</b>', '<b>Telefon / emel</b>', '<b>Catatan</b>', '<b>Dihantar pada</b>']];
         $invitation->rsvpResponses()->orderBy('id')->each(function ($row) use (&$rsvpRows, $text, $when): void {
             $rsvpRows[] = [
                 $text($row->guest_name),
                 $row->attendance === 'attending' ? 'Hadir' : 'Tidak hadir',
                 (int) $row->pax,
+                $text($row->event_title),
                 $text($row->contact),
                 $text($row->notes),
                 $when($row->created_at),
@@ -67,7 +69,7 @@ class GuestResponseController extends Controller
 
         // setColWidth() always applies to the sheet added last, so widths are set right after each sheet is added.
         $xlsx = SimpleXLSXGen::fromArray($rsvpRows, 'RSVP')
-            ->setColWidth(1, 28)->setColWidth(2, 16)->setColWidth(3, 18)->setColWidth(4, 26)->setColWidth(5, 40)->setColWidth(6, 20)
+            ->setColWidth(1, 28)->setColWidth(2, 16)->setColWidth(3, 18)->setColWidth(4, 32)->setColWidth(5, 26)->setColWidth(6, 40)->setColWidth(7, 20)
             ->addSheet($wishRows, 'Doa & Ucapan')
             ->setColWidth(1, 28)->setColWidth(2, 70)->setColWidth(3, 20);
 

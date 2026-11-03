@@ -98,6 +98,7 @@ class CheckoutController extends Controller
                 'status' => 'pending_payment',
                 'content' => $content,
                 'rsvp_enabled' => false,
+                'rsvp_deadline' => InvitationSupport::rsvpDeadline($content['rsvpDeadline'] ?? null),
             ];
 
             if ($invitation) {

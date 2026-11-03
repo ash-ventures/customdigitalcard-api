@@ -5,11 +5,9 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\Invitation;
 use App\Models\Order;
-use App\Models\Template;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class PaymentAndAdminTest extends TestCase
@@ -260,6 +258,8 @@ class PaymentAndAdminTest extends TestCase
     public function test_admin_endpoints_are_forbidden_for_customers_and_open_to_admins(): void
     {
         $this->checkout();
+        $invitation = Invitation::firstOrFail();
+        $invitation->update(['content' => [...$invitation->content, 'couplePhoto' => 'data:image/jpeg;base64,AAAA']]);
         $customer = User::factory()->create();
         $admin = User::factory()->create(['password' => 'password123']);
         $admin->forceFill(['is_admin' => true])->save();
@@ -273,7 +273,11 @@ class PaymentAndAdminTest extends TestCase
         $this->actingAs($admin)->getJson('/api/v1/admin/stats')->assertOk()->assertJsonPath('data.customers_total', 1);
         $this->actingAs($admin)->getJson('/api/v1/admin/customers?consent=1&q=aminah')->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.orders_count', 1);
         $this->actingAs($admin)->getJson('/api/v1/admin/orders?status=pending')->assertOk()->assertJsonCount(1, 'data');
-        $this->actingAs($admin)->getJson('/api/v1/admin/invitations')->assertOk()->assertJsonMissingPath('data.0.content.donationQr');
+        $this->actingAs($admin)->getJson('/api/v1/admin/invitations')
+            ->assertOk()
+            ->assertJsonMissingPath('data.0.content.donationQr')
+            ->assertJsonMissingPath('data.0.content.couplePhoto')
+            ->assertJsonPath('data.0.has_couple_photo', true);
     }
 
     public function test_customer_csv_export_neutralises_formulas_and_respects_consent(): void

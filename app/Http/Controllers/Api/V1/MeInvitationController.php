@@ -32,6 +32,7 @@ class MeInvitationController extends Controller
             'slug' => InvitationSupport::draftSlug(),
             'status' => 'draft',
             'content' => $validated['content'],
+            'rsvp_deadline' => InvitationSupport::rsvpDeadline($validated['content']['rsvpDeadline'] ?? null),
         ]);
 
         return response()->json(['data' => $this->present($invitation->load('template', 'orders'))], 201);
@@ -42,7 +43,10 @@ class MeInvitationController extends Controller
         $this->ensureOwner($request, $invitation);
         $validated = $request->validate(['template' => ['sometimes', 'exists:templates,slug']] + InvitationSupport::contentRules());
 
-        $attributes = ['content' => $validated['content']];
+        $attributes = [
+            'content' => $validated['content'],
+            'rsvp_deadline' => InvitationSupport::rsvpDeadline($validated['content']['rsvpDeadline'] ?? null),
+        ];
         if (isset($validated['template']) && $invitation->status !== 'published') {
             $attributes['template_id'] = Template::where('slug', $validated['template'])->where('is_active', true)->firstOrFail()->id;
         }
@@ -100,6 +104,7 @@ class MeInvitationController extends Controller
             'status' => $invitation->status,
             'template' => InvitationSupport::template($invitation),
             'content' => $invitation->content,
+            'rsvp_deadline' => $invitation->rsvp_deadline,
             'slug' => $invitation->slug,
             'public_path' => InvitationSupport::publicPath($invitation),
             'package' => $invitation->package?->only(['slug', 'name']),

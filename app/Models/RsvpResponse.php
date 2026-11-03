@@ -11,6 +11,7 @@ class RsvpResponse extends Model
         'invitation_id',
         'guest_name',
         'attendance',
+        'event_title',
         'pax',
         'contact',
         'notes',

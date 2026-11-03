@@ -203,7 +203,9 @@ class AdminController extends Controller
     {
         $content = $i->content ?? [];
         $hasQr = filled($content['donationQr'] ?? null);
+        $hasCouplePhoto = filled($content['couplePhoto'] ?? null);
         unset($content['donationQr']);
+        unset($content['couplePhoto']);
         unset($content['design']['background']);
         if (isset($content['design']) && $content['design'] === []) {
             unset($content['design']);
@@ -222,6 +224,7 @@ class AdminController extends Controller
             'order' => $order ? ['reference' => $order->reference, 'status' => $order->status, 'amount_sen' => $order->amount_sen] : null,
             'content' => $content,
             'has_donation_qr' => $hasQr,
+            'has_couple_photo' => $hasCouplePhoto,
             'expires_at' => $i->expires_at,
             'created_at' => $i->created_at,
         ];

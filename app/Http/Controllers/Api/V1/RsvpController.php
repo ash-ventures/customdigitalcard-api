@@ -18,6 +18,7 @@ class RsvpController extends Controller
             'guest_name' => ['required', 'string', 'max:100'],
             'attendance' => ['required', 'in:attending,not_attending'],
             'pax' => ['required', 'integer', 'min:1', 'max:10'],
+            'event_title' => ['nullable', 'string', 'max:120'],
             'contact' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:500'],
             'submission_key' => ['required', 'uuid'],
@@ -35,6 +36,13 @@ class RsvpController extends Controller
 
         if ($invitation->rsvp_deadline?->isPast()) {
             return response()->json(['message' => 'The RSVP deadline has passed.'], 422);
+        }
+
+        $events = collect($invitation->content['schedule'] ?? [])
+            ->filter(fn ($event) => is_array($event) && ($event['rsvpEnabled'] ?? true) && filled($event['title'] ?? null))
+            ->pluck('title');
+        if (filled($validated['event_title'] ?? null) && ! $events->contains($validated['event_title'])) {
+            return response()->json(['message' => 'The selected event is not available for RSVP.'], 422);
         }
 
         try {
@@ -71,7 +79,11 @@ class RsvpController extends Controller
             'summary' => [
                 'responses' => $invitation->rsvpResponses()->count(),
                 'attending' => $invitation->rsvpResponses()->where('attendance', 'attending')->sum('pax'),
-                'not_attending' => $invitation->rsvpResponses()->where('attendance', 'not_attending')->count(),
+                'not_attending' => $invitation->rsvpResponses()->where('attendance', 'not_attending')->sum('pax'),
+                'by_event' => $invitation->rsvpResponses()
+                    ->selectRaw('event_title, attendance, SUM(pax) as guests')
+                    ->groupBy('event_title', 'attendance')
+                    ->get(),
             ],
         ]);
     }
@@ -86,7 +98,7 @@ class RsvpController extends Controller
                 throw new \RuntimeException('Unable to open the CSV output stream.');
             }
 
-            fputcsv($output, ['Guest name', 'Attendance', 'Pax', 'Contact', 'Notes', 'Submitted at']);
+            fputcsv($output, ['Guest name', 'Attendance', 'Pax', 'Event', 'Contact', 'Notes', 'Submitted at']);
 
             $invitation->rsvpResponses()->orderBy('id')->chunk(500, function ($responses) use ($output): void {
                 foreach ($responses as $response) {
@@ -94,6 +106,7 @@ class RsvpController extends Controller
                         $response->guest_name,
                         $response->attendance,
                         $response->pax,
+                        $response->event_title,
                         $response->contact,
                         $response->notes,
                         $response->created_at?->toIso8601String(),
