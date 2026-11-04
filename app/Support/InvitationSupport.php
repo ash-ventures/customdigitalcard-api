@@ -73,6 +73,8 @@ class InvitationSupport
             "$prefix.design.floralOffsetY" => ['nullable', 'integer', 'between:-10,10'],
             "$prefix.design.floralRotation" => ['nullable', 'integer', 'between:-12,12'],
             "$prefix.design.floralOpacity" => ['nullable', 'integer', 'between:25,100'],
+            "$prefix.design.frameRadius" => ['nullable', 'integer', 'between:0,40'],
+            "$prefix.design.frameOpacity" => ['nullable', 'integer', 'between:0,100'],
             "$prefix.design.intro" => ['nullable', 'boolean'],
             "$prefix.design.motion" => ['nullable', 'boolean'],
             "$prefix.design.background" => ['nullable', 'string', 'max:1500000', 'regex:/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/'],
