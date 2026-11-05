@@ -16,7 +16,7 @@ class InvitationController extends Controller
             ->where(function ($query) {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
-            ->with('template:id,slug,name,theme,category')
+            ->with('template')
             ->firstOrFail();
 
         return response()->json([
@@ -26,7 +26,7 @@ class InvitationController extends Controller
                 'rsvp_enabled' => $invitation->rsvp_enabled,
                 'rsvp_deadline' => $invitation->rsvp_deadline,
                 'expires_at' => $invitation->expires_at,
-                'template' => $invitation->template->only(['slug', 'name', 'theme', 'category']),
+                'template' => $invitation->template->toCatalog(),
             ],
         ]);
     }

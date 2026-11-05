@@ -34,7 +34,7 @@ class InvitationSupport
             "$prefix.additionalContacts.*.phone" => ['nullable', 'string', 'max:20'],
             "$prefix.hashtag" => ['nullable', 'string', 'max:50'],
             "$prefix.couplePhoto" => ['nullable', 'string', 'max:1500000', 'regex:/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/'],
-            "$prefix.musicUrl" => ['nullable', 'url:https', 'max:2048'],
+            "$prefix.musicUrl" => ['nullable', 'string', 'max:2048', 'regex:/^(https:\/\/[^\s@]+|\/songs\/[\w-]+\.mp3)$/'],
             "$prefix.schedule" => ['nullable', 'array', 'max:6'],
             "$prefix.schedule.*" => ['array'],
             "$prefix.schedule.*.time" => ['nullable', 'date_format:H:i'],
@@ -75,6 +75,8 @@ class InvitationSupport
             "$prefix.design.floralOpacity" => ['nullable', 'integer', 'between:25,100'],
             "$prefix.design.frameRadius" => ['nullable', 'integer', 'between:0,40'],
             "$prefix.design.frameOpacity" => ['nullable', 'integer', 'between:0,100'],
+            "$prefix.design.navColor" => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            "$prefix.design.navOpacity" => ['nullable', 'integer', 'between:0,100'],
             "$prefix.design.intro" => ['nullable', 'boolean'],
             "$prefix.design.motion" => ['nullable', 'boolean'],
             "$prefix.design.background" => ['nullable', 'string', 'max:1500000', 'regex:/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/'],
@@ -119,7 +121,7 @@ class InvitationSupport
     {
         $t = $invitation->template;
 
-        return $t ? ['slug' => $t->slug, 'name' => $t->name, 'theme' => $t->theme, 'category' => $t->category] : null;
+        return $t ? $t->toCatalog() : null;
     }
 
     public static function order(?Order $order): ?array

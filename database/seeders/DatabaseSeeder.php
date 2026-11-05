@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Package;
 use App\Models\Template;
+use App\Models\TemplateCategory;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -36,10 +37,17 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($templates as $index => $template) {
-            Template::updateOrCreate(
-                ['slug' => $template['slug']],
-                [...$template, 'is_active' => true, 'sort_order' => $index + 1],
-            );
+            $model = Template::firstOrNew(['slug' => $template['slug']]);
+            // Admin-managed fields (premium, active, order) are only seeded for new cards.
+            $model->fill($model->exists ? ['name' => $template['name'], 'description' => $template['description'], 'theme' => $template['theme']] : [...$template, 'is_active' => true, 'sort_order' => $index + 1]);
+            $model->save();
+            if (! $model->code) {
+                $model->update(['code' => Template::codeFor($model->id)]);
+            }
+        }
+
+        foreach (['Kahwin', 'Event', 'Raya', 'Formal'] as $order => $name) {
+            TemplateCategory::firstOrCreate(['name' => $name], ['sort_order' => $order + 1, 'is_system' => true]);
         }
 
         $packages = [

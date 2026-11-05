@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogController;
+use App\Http\Controllers\Api\V1\CardDesignController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\GuestResponseController;
 use App\Http\Controllers\Api\V1\InvitationController;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::get('/health', fn () => response()->json(['status' => 'ok']))->name('api.health');
     Route::get('/templates', [CatalogController::class, 'templates']);
+    Route::get('/templates/{code}/background', [CardDesignController::class, 'background'])
+        ->where('code', 'TPL-[0-9]+');
     Route::get('/packages', [CatalogController::class, 'packages']);
     Route::get('/invitations/public/{slug}', [InvitationController::class, 'publicShow'])
         ->where('slug', '[a-z0-9-]+');
@@ -59,6 +62,15 @@ Route::prefix('v1')->group(function () {
 
         Route::prefix('admin')->middleware('admin')->group(function () {
             Route::get('/vouchers', [VoucherController::class, 'index']);
+            Route::get('/card-designs', [CardDesignController::class, 'index']);
+            Route::post('/card-designs', [CardDesignController::class, 'store']);
+            Route::put('/card-designs/reorder', [CardDesignController::class, 'reorder']);
+            Route::put('/card-designs/{template}', [CardDesignController::class, 'update']);
+            Route::delete('/card-designs/{template}', [CardDesignController::class, 'destroy']);
+            Route::get('/card-categories', [CardDesignController::class, 'categories']);
+            Route::post('/card-categories', [CardDesignController::class, 'storeCategory']);
+            Route::put('/card-categories/{category}', [CardDesignController::class, 'updateCategory']);
+            Route::delete('/card-categories/{category}', [CardDesignController::class, 'destroyCategory']);
             Route::post('/vouchers', [VoucherController::class, 'store']);
             Route::put('/vouchers/{voucher}', [VoucherController::class, 'update']);
             Route::delete('/vouchers/{voucher}', [VoucherController::class, 'destroy']);
