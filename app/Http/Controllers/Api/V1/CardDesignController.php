@@ -169,9 +169,6 @@ class CardDesignController extends Controller
 
     public function destroyCategory(TemplateCategory $category): JsonResponse
     {
-        if ($category->is_system) {
-            return response()->json(['message' => 'Kategori asas tidak boleh dipadam.'], 422);
-        }
         if (Template::where('category', $category->name)->exists()) {
             return response()->json(['message' => 'Pindahkan kad dalam kategori ini dahulu sebelum memadam.'], 422);
         }
