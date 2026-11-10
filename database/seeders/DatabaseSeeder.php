@@ -11,6 +11,8 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call([CardCategorySeeder::class]);
+
         $templates = [
             ['slug' => 'seri-kasih', 'name' => 'Seri Bunga Raya', 'category' => 'Kahwin', 'theme' => 'raya', 'description' => 'Bunga raya merah delima di atas krim hangat, lambang semangat dan keberanian cinta.', 'is_premium' => false],
             ['slug' => 'ruang-kita', 'name' => 'Ruang Kita', 'category' => 'Kahwin', 'theme' => 'moden', 'description' => 'Melayu moden: warna teal tengah malam, garisan emas halus dan tipografi bersih.', 'is_premium' => false],
