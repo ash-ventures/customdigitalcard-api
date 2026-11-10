@@ -82,6 +82,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/orders/{order}/sync', [AdminController::class, 'syncOrder']);
             Route::get('/invitations', [AdminController::class, 'invitations']);
             Route::get('/invitations/{invitation}', [AdminController::class, 'invitation']);
+            Route::get('/invitations/{invitation}/responses', [GuestResponseController::class, 'adminIndex']);
+            Route::patch('/invitations/{invitation}', [AdminController::class, 'updateInvitation']);
         });
     });
 });

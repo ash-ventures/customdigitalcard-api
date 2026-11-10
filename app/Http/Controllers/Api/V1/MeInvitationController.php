@@ -47,7 +47,7 @@ class MeInvitationController extends Controller
             'content' => $validated['content'],
             'rsvp_deadline' => InvitationSupport::rsvpDeadline($validated['content']['rsvpDeadline'] ?? null),
         ];
-        if (isset($validated['template']) && $invitation->status !== 'published') {
+        if (isset($validated['template']) && ! in_array($invitation->status, ['published', 'suspended'], true)) {
             $attributes['template_id'] = Template::where('slug', $validated['template'])->where('is_active', true)->firstOrFail()->id;
         }
         $invitation->update($attributes);
@@ -59,7 +59,7 @@ class MeInvitationController extends Controller
     {
         $this->ensureOwner($request, $invitation);
 
-        if ($invitation->status === 'published') {
+        if (in_array($invitation->status, ['published', 'suspended'], true)) {
             return response()->json(['message' => 'Kad yang telah diterbitkan tidak boleh dipadam.'], 422);
         }
 

@@ -23,6 +23,16 @@ class GuestResponseController extends Controller
     {
         $this->ensureOwner($request, $invitation);
 
+        return $this->responses($invitation);
+    }
+
+    public function adminIndex(Invitation $invitation): JsonResponse
+    {
+        return $this->responses($invitation);
+    }
+
+    private function responses(Invitation $invitation): JsonResponse
+    {
         $rsvps = $invitation->rsvpResponses()->latest('id');
         $wishes = $invitation->wishes()->latest('id');
 
@@ -85,6 +95,6 @@ class GuestResponseController extends Controller
     private function ensureOwner(Request $request, Invitation $invitation): void
     {
         abort_unless($invitation->user_id === $request->user()->id, 404);
-        abort_unless($invitation->status === 'published', 404);
+        abort_unless(in_array($invitation->status, ['published', 'suspended'], true), 404);
     }
 }

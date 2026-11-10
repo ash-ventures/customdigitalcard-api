@@ -292,4 +292,41 @@ class PaymentAndAdminTest extends TestCase
         $this->assertStringContainsString("'=cmd|calc", $csv);
         $this->assertStringNotContainsString('no@example.test', $csv);
     }
+
+    public function test_admin_can_manage_paid_invitations_and_view_their_guest_responses(): void
+    {
+        $this->checkout();
+        $invitation = Invitation::firstOrFail();
+        $invitation->wishes()->create(['name' => 'Guest', 'message' => 'Congratulations']);
+        $invitation->rsvpResponses()->create(['guest_name' => 'Guest', 'attendance' => 'attending', 'pax' => 2]);
+        $admin = User::factory()->create();
+        $admin->forceFill(['is_admin' => true])->save();
+        $customer = User::factory()->create();
+        $url = "/api/v1/admin/invitations/{$invitation->id}";
+
+        $this->getJson("{$url}/responses")->assertUnauthorized();
+        $this->actingAs($customer)->getJson("{$url}/responses")->assertForbidden();
+        $this->actingAs($customer)->patchJson($url, ['expires_at' => null])->assertForbidden();
+        $this->actingAs($admin)->getJson("{$url}/responses")
+            ->assertOk()->assertJsonPath('data.summary.attending_guests', 2)
+            ->assertJsonPath('data.wishes.0.message', 'Congratulations');
+        $this->actingAs($admin)->patchJson($url, ['status' => 'published'])->assertUnprocessable();
+
+        $invitation->orders()->firstOrFail()->update(['status' => 'paid']);
+        $invitation->update(['status' => 'published']);
+        $this->actingAs($admin)->patchJson($url, ['status' => 'suspended'])
+            ->assertOk()->assertJsonPath('data.status', 'suspended')->assertJsonPath('data.public_path', null);
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}")->assertNotFound();
+        $invitation->update(['user_id' => $customer->id]);
+        $this->actingAs($customer)->deleteJson("/api/v1/me/invitations/{$invitation->id}")->assertUnprocessable();
+        $this->actingAs($customer)->getJson("/api/v1/me/invitations/{$invitation->id}/responses")
+            ->assertOk()->assertJsonPath('data.summary.wishes_total', 1);
+        $this->actingAs($customer)->postJson('/api/v1/checkout', [
+            'template' => 'seri-kasih', 'package' => 'starter',
+            'content' => ['bride' => 'Alya'], 'invitation_id' => $invitation->id,
+        ])->assertNotFound();
+        $this->actingAs($admin)->patchJson($url, ['status' => 'published', 'expires_at' => '2030-01-01T00:00:00Z'])
+            ->assertOk()->assertJsonPath('data.status', 'published');
+        $this->actingAs($admin)->patchJson($url, ['status' => 'draft'])->assertUnprocessable();
+    }
 }

@@ -87,7 +87,7 @@ class CheckoutController extends Controller
             $invitation = null;
             if ($user && ! empty($validated['invitation_id'])) {
                 $invitation = $user->invitations()
-                    ->where('status', '!=', 'published')
+                    ->whereNotIn('status', ['published', 'suspended'])
                     ->findOrFail($validated['invitation_id']);
             }
 

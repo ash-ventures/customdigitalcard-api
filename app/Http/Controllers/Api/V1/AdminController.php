@@ -129,6 +129,24 @@ class AdminController extends Controller
         return response()->json(['data' => $this->invitationRow($invitation)]);
     }
 
+    public function updateInvitation(Request $request, Invitation $invitation): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['sometimes', 'in:published,suspended'],
+            'expires_at' => ['sometimes', 'nullable', 'date'],
+        ]);
+
+        if (isset($validated['status']) && (! in_array($invitation->status, ['published', 'suspended'], true)
+            || ! $invitation->orders()->where('status', 'paid')->exists())) {
+            return response()->json(['message' => 'Only paid, published or suspended invitations can change status.'], 422);
+        }
+
+        $invitation->update($validated);
+        $invitation->load(['template', 'customer', 'package', 'orders']);
+
+        return response()->json(['data' => $this->invitationRow($invitation)]);
+    }
+
     private function customerQuery(Request $request)
     {
         $query = Customer::query()
