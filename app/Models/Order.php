@@ -12,6 +12,7 @@ class Order extends Model
         'customer_id',
         'invitation_id',
         'package_id',
+        'package_snapshot',
         'voucher_id',
         'voucher_code',
         'subtotal_sen',
@@ -29,7 +30,7 @@ class Order extends Model
 
     protected function casts(): array
     {
-        return ['paid_at' => 'datetime', 'last_synced_at' => 'datetime'];
+        return ['paid_at' => 'datetime', 'last_synced_at' => 'datetime', 'package_snapshot' => 'array'];
     }
 
     public function customer(): BelongsTo

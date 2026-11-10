@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\GuestResponseController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\MeInvitationController;
 use App\Http\Controllers\Api\V1\PaymentCallbackController;
+use App\Http\Controllers\Api\V1\PackageAdminController;
 use App\Http\Controllers\Api\V1\RsvpController;
 use App\Http\Controllers\Api\V1\VoucherController;
 use App\Http\Controllers\Api\V1\WishController;
@@ -61,6 +62,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/me/invitations/{invitation}/responses/export', [GuestResponseController::class, 'export'])->middleware('throttle:20,1');
 
         Route::prefix('admin')->middleware('admin')->group(function () {
+            Route::get('/packages', [PackageAdminController::class, 'index']);
+            Route::put('/packages/{package}', [PackageAdminController::class, 'update']);
             Route::get('/vouchers', [VoucherController::class, 'index']);
             Route::get('/card-designs', [CardDesignController::class, 'index']);
             Route::post('/card-designs', [CardDesignController::class, 'store']);

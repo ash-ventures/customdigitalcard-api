@@ -24,6 +24,7 @@ class InvitationController extends Controller
                 'slug' => $invitation->slug,
                 'content' => $invitation->content,
                 'rsvp_enabled' => $invitation->rsvp_enabled,
+                'guestbook_enabled' => $invitation->guestbook_enabled,
                 'rsvp_deadline' => $invitation->rsvp_deadline,
                 'expires_at' => $invitation->expires_at,
                 'template' => $invitation->template->toCatalog(),

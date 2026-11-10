@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\Invitation;
 use App\Models\Order;
+use App\Models\Package;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -328,5 +329,56 @@ class PaymentAndAdminTest extends TestCase
         $this->actingAs($admin)->patchJson($url, ['status' => 'published', 'expires_at' => '2030-01-01T00:00:00Z'])
             ->assertOk()->assertJsonPath('data.status', 'published');
         $this->actingAs($admin)->patchJson($url, ['status' => 'draft'])->assertUnprocessable();
+    }
+
+    public function test_package_management_is_admin_only_and_seed_does_not_overwrite_changes(): void
+    {
+        $package = Package::where('slug', 'starter')->firstOrFail();
+        $customer = User::factory()->create();
+        $admin = User::factory()->create();
+        $admin->forceFill(['is_admin' => true])->save();
+        $changes = [
+            'name' => 'Custom', 'price_sen' => 2750, 'features' => ['Online invitation', 'Guestbook'],
+            'validity_days_after_event' => 60, 'rsvp_enabled' => true, 'guestbook_enabled' => false,
+            'premium_templates' => true, 'is_active' => true, 'sort_order' => 1,
+        ];
+        $url = "/api/v1/admin/packages/{$package->id}";
+        $this->putJson($url, $changes)->assertUnauthorized();
+        $this->actingAs($customer)->putJson($url, $changes)->assertForbidden();
+        $this->actingAs($admin)->putJson($url, [...$changes, 'price_sen' => -1])->assertUnprocessable();
+        $this->actingAs($admin)->putJson($url, $changes)->assertOk()->assertJsonPath('data.price_sen', 2750);
+        $this->seed();
+        $this->getJson('/api/v1/packages')->assertJsonFragment(['name' => 'Custom', 'price_sen' => 2750]);
+        $this->assertFalse($package->fresh()->guestbook_enabled);
+    }
+
+    public function test_checkout_snapshots_benefits_and_rejects_stale_package_version(): void
+    {
+        $package = Package::where('slug', 'starter')->firstOrFail();
+        $package->update(['rsvp_enabled' => true, 'guestbook_enabled' => true]);
+        $version = $package->fresh()->catalogVersion();
+        $reference = $this->checkout(['package_version' => $version]);
+        $invitation = Invitation::firstOrFail();
+        $package->update(['price_sen' => 2500, 'rsvp_enabled' => false, 'guestbook_enabled' => false, 'validity_days_after_event' => 5]);
+        $this->postJson('/api/v1/checkout', $this->payload(['package_version' => $version]))->assertUnprocessable();
+        $this->fakeBill(paid: true);
+        $this->getJson("/api/v1/orders/{$reference}")->assertJsonPath('data.status', 'paid');
+        $invitation->refresh();
+        $this->assertTrue($invitation->rsvp_enabled);
+        $this->assertTrue($invitation->guestbook_enabled);
+        $this->assertSame(\Carbon\CarbonImmutable::parse($invitation->content['date'])->addDays(30)->toDateString(), $invitation->expires_at->toDateString());
+        $this->postJson("/api/v1/invitations/public/{$invitation->slug}/wishes", ['name' => 'Guest', 'message' => 'Best wishes'])->assertCreated();
+    }
+
+    public function test_guestbook_can_be_disabled_for_future_purchases(): void
+    {
+        Package::where('slug', 'starter')->update(['guestbook_enabled' => false]);
+        $reference = $this->checkout();
+        $this->fakeBill(paid: true);
+        $this->getJson("/api/v1/orders/{$reference}")->assertJsonPath('data.status', 'paid');
+        $invitation = Invitation::firstOrFail();
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}")->assertJsonPath('data.guestbook_enabled', false);
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}/wishes")->assertNotFound();
+        $this->postJson("/api/v1/invitations/public/{$invitation->slug}/wishes", ['name' => 'Guest', 'message' => 'Best wishes'])->assertNotFound();
     }
 }

@@ -16,6 +16,7 @@ class Package extends Model
         'features',
         'gallery_limit',
         'rsvp_enabled',
+        'guestbook_enabled',
         'premium_templates',
         'is_active',
         'sort_order',
@@ -26,6 +27,7 @@ class Package extends Model
         return [
             'features' => 'array',
             'rsvp_enabled' => 'boolean',
+            'guestbook_enabled' => 'boolean',
             'premium_templates' => 'boolean',
             'is_active' => 'boolean',
         ];
@@ -39,5 +41,13 @@ class Package extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function catalogVersion(): string
+    {
+        return hash('sha256', json_encode($this->only([
+            'name', 'price_sen', 'currency', 'features', 'validity_days_after_event',
+            'rsvp_enabled', 'guestbook_enabled', 'premium_templates', 'is_active',
+        ]), JSON_THROW_ON_ERROR));
     }
 }

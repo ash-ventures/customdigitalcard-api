@@ -68,7 +68,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Istimewa',
                 'price_sen' => 3900,
                 'validity_days_after_event' => 30,
-                'features' => ['Semua ciri Asas', 'RSVP dan eksport tetamu', 'Galeri foto dan buku tetamu'],
+                'features' => ['Semua ciri Asas', 'RSVP dan eksport tetamu', 'Buku tetamu'],
                 'gallery_limit' => 12,
                 'rsvp_enabled' => true,
                 'premium_templates' => true,
@@ -86,7 +86,7 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($packages as $index => $package) {
-            Package::updateOrCreate(
+            Package::firstOrCreate(
                 ['slug' => $package['slug']],
                 [...$package, 'currency' => 'MYR', 'is_active' => true, 'sort_order' => $index + 1],
             );

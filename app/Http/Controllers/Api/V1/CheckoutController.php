@@ -29,6 +29,7 @@ class CheckoutController extends Controller
         $validated = $request->validate([
             'template' => ['required', 'exists:templates,slug'],
             'package' => ['required', 'exists:packages,slug'],
+            'package_version' => ['sometimes', 'string', 'size:64'],
             'voucher_code' => ['nullable', 'string', 'max:40'],
             'invitation_id' => ['nullable', 'integer'],
             'customer' => [$needsCustomer, 'array'],
@@ -43,6 +44,9 @@ class CheckoutController extends Controller
 
         if (! $template || ! $package) {
             return response()->json(['message' => 'Tema atau pakej tidak tersedia.'], 422);
+        }
+        if (isset($validated['package_version']) && ! hash_equals($package->catalogVersion(), $validated['package_version'])) {
+            return response()->json(['message' => 'This package has changed. Please refresh the page and review the current price and benefits.'], 422);
         }
         if ($template->is_premium && ! $package->premium_templates) {
             return response()->json([
@@ -118,6 +122,7 @@ class CheckoutController extends Controller
                 'customer_id' => $customer->id,
                 'invitation_id' => $invitation->id,
                 'package_id' => $package->id,
+                'package_snapshot' => $package->only(['name', 'price_sen', 'currency', 'validity_days_after_event', 'features', 'rsvp_enabled', 'guestbook_enabled', 'premium_templates']),
                 'reference' => 'JK-'.Str::upper(Str::random(12)),
                 'voucher_id' => $voucher?->id,
                 'voucher_code' => $voucher?->code,

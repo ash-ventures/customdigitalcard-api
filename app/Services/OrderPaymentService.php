@@ -93,11 +93,12 @@ class OrderPaymentService
     {
         $invitation = $order->invitation()->firstOrFail();
         $package = $order->package()->firstOrFail();
+        $benefits = $order->package_snapshot ?? $package->only(['validity_days_after_event', 'rsvp_enabled', 'guestbook_enabled']);
         $date = $invitation->content['date'] ?? null;
 
         try {
             $expires = $date
-                ? CarbonImmutable::createFromFormat('Y-m-d', $date, 'Asia/Kuala_Lumpur')->addDays($package->validity_days_after_event)->endOfDay()
+                ? CarbonImmutable::createFromFormat('Y-m-d', $date, 'Asia/Kuala_Lumpur')->addDays($benefits['validity_days_after_event'])->endOfDay()
                 : now()->addDays(180);
         } catch (Throwable) {
             $expires = now()->addDays(180);
@@ -108,7 +109,8 @@ class OrderPaymentService
             'package_id' => $package->id,
             'published_at' => $invitation->published_at ?? now(),
             'expires_at' => $expires,
-            'rsvp_enabled' => (bool) ($invitation->content['rsvpEnabled'] ?? false) && $package->rsvp_enabled,
+            'rsvp_enabled' => (bool) ($invitation->content['rsvpEnabled'] ?? false) && $benefits['rsvp_enabled'],
+            'guestbook_enabled' => (bool) $benefits['guestbook_enabled'],
         ])->save();
     }
 }

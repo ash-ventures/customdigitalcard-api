@@ -17,6 +17,7 @@ class Invitation extends Model
         'status',
         'content',
         'rsvp_enabled',
+        'guestbook_enabled',
         'rsvp_deadline',
         'published_at',
         'expires_at',
@@ -27,6 +28,7 @@ class Invitation extends Model
         return [
             'content' => 'array',
             'rsvp_enabled' => 'boolean',
+            'guestbook_enabled' => 'boolean',
             'rsvp_deadline' => 'datetime',
             'published_at' => 'datetime',
             'expires_at' => 'datetime',

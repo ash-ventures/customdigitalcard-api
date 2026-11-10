@@ -29,7 +29,8 @@ class CatalogController extends Controller
             'data' => Package::query()
                 ->where('is_active', true)
                 ->orderBy('sort_order')
-                ->get(),
+                ->get()
+                ->map(fn (Package $package) => $package->toArray() + ['catalog_version' => $package->catalogVersion()]),
         ]);
     }
 }

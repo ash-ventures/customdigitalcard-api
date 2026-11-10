@@ -12,6 +12,7 @@ class WishController extends Controller
     public function index(string $slug): JsonResponse
     {
         $invitation = $this->published($slug);
+        abort_unless($invitation->guestbook_enabled && ($invitation->content['showWishes'] ?? true), 404);
 
         return response()->json(['data' => $invitation->wishes()->latest('id')->limit(100)->get(['name', 'message', 'created_at'])]);
     }
@@ -19,7 +20,7 @@ class WishController extends Controller
     public function store(Request $request, string $slug): JsonResponse
     {
         $invitation = $this->published($slug);
-        abort_if(($invitation->content['showWishes'] ?? true) === false, 404);
+        abort_unless($invitation->guestbook_enabled && ($invitation->content['showWishes'] ?? true), 404);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:60'],
