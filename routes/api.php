@@ -2,14 +2,14 @@
 
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CardDesignController;
+use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\GuestResponseController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\MeInvitationController;
-use App\Http\Controllers\Api\V1\PaymentCallbackController;
 use App\Http\Controllers\Api\V1\PackageAdminController;
+use App\Http\Controllers\Api\V1\PaymentCallbackController;
 use App\Http\Controllers\Api\V1\RsvpController;
 use App\Http\Controllers\Api\V1\VoucherController;
 use App\Http\Controllers\Api\V1\WishController;
@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function () {
         ->where('reference', 'JK-[A-Z0-9]+');
     Route::post('/payments/billplz/callback', [PaymentCallbackController::class, 'billplz'])->middleware('throttle:60,1');
     Route::post('/payments/billplz/redirect', [PaymentCallbackController::class, 'billplzRedirect'])->middleware('throttle:60,1');
+    Route::post('/payments/chip/callback', [PaymentCallbackController::class, 'chip'])->middleware('throttle:60,1');
 
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');

@@ -7,7 +7,9 @@ use App\Models\Invitation;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -20,12 +22,38 @@ class PaymentAndAdminTest extends TestCase
         parent::setUp();
         $this->seed();
         config([
+            'services.payments.provider' => 'billplz',
             'services.billplz.api_key' => 'test-key',
             'services.billplz.collection_id' => 'col123',
             'services.billplz.x_signature_key' => 'sig-secret',
             'services.billplz.base_url' => 'https://www.billplz-sandbox.com/api/v3',
             'services.billplz.frontend_url' => 'http://127.0.0.1:3000',
         ]);
+    }
+
+    private function configureChip(): void
+    {
+        config([
+            'services.payments.provider' => 'chip',
+            'services.chip.api_key' => 'chip-test-key',
+            'services.chip.brand_id' => 'brand-test-id',
+            'services.chip.base_url' => 'https://gate.chip-in.asia/api/v1',
+            'services.chip.frontend_url' => 'http://127.0.0.1:3000',
+            'services.chip.success_callback_url' => null,
+        ]);
+    }
+
+    private function chipPurchase(string $id = 'purchase-1', int $amount = 1900, string $status = 'paid'): array
+    {
+        return [
+            'id' => $id,
+            'status' => $status,
+            'purchase' => [
+                'total' => $amount,
+                'currency' => 'MYR',
+                'products' => [['name' => 'JemputanKu - Pakej Asas', 'price' => $amount]],
+            ],
+        ];
     }
 
     private function payload(array $overrides = []): array
@@ -101,6 +129,127 @@ class PaymentAndAdminTest extends TestCase
 
         $this->postJson('/api/v1/checkout', $this->payload())->assertStatus(503);
         $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_chip_checkout_creates_purchase_using_api_credentials_and_redirects_to_checkout_url(): void
+    {
+        $this->configureChip();
+        config(['services.chip.success_callback_url' => 'https://api.example.test/api/v1/payments/chip/callback']);
+        Http::fake([
+            'gate.chip-in.asia/api/v1/purchases/' => Http::response([
+                'id' => 'purchase-1',
+                'checkout_url' => 'https://gate.chip-in.asia/p/purchase-1/',
+            ], 201),
+        ]);
+
+        $response = $this->postJson('/api/v1/checkout', $this->payload())
+            ->assertCreated()
+            ->assertJsonPath('data.payment_url', 'https://gate.chip-in.asia/p/purchase-1/')
+            ->assertJsonPath('data.payment_provider', 'chip');
+        $reference = $response->json('data.order_reference');
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/purchases/')
+            && $request->hasHeader('Authorization', 'Bearer chip-test-key')
+            && $request['brand_id'] === 'brand-test-id'
+            && $request['client']['email'] === 'aminah@example.test'
+            && (int) $request['purchase']['products'][0]['price'] === 1900
+            && $request['success_callback'] === 'https://api.example.test/api/v1/payments/chip/callback'
+            && str_contains($request['success_redirect'], '/bayaran/status?ref='.$reference));
+
+        $this->assertDatabaseHas('orders', [
+            'reference' => $reference,
+            'status' => 'pending',
+            'provider' => 'chip',
+            'provider_reference' => 'purchase-1',
+        ]);
+    }
+
+    public function test_chip_purchase_is_verified_server_side_before_publishing(): void
+    {
+        $this->configureChip();
+        Http::fake([
+            'gate.chip-in.asia/api/v1/purchases/' => Http::response([
+                'id' => 'purchase-1',
+                'checkout_url' => 'https://gate.chip-in.asia/p/purchase-1/',
+            ], 201),
+            'gate.chip-in.asia/api/v1/purchases/purchase-1/' => Http::response($this->chipPurchase(), 200),
+        ]);
+
+        $reference = $this->postJson('/api/v1/checkout', $this->payload())
+            ->assertCreated()
+            ->json('data.order_reference');
+        $slug = Invitation::firstOrFail()->slug;
+
+        $this->getJson("/api/v1/orders/{$reference}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.invitation.public_path', "/jemputan/{$slug}");
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/purchases/purchase-1/'));
+    }
+
+    public function test_chip_amount_mismatch_does_not_publish(): void
+    {
+        $this->configureChip();
+        Http::fake([
+            'gate.chip-in.asia/api/v1/purchases/' => Http::response([
+                'id' => 'purchase-1',
+                'checkout_url' => 'https://gate.chip-in.asia/p/purchase-1/',
+            ], 201),
+            'gate.chip-in.asia/api/v1/purchases/purchase-1/' => Http::response($this->chipPurchase(amount: 100), 200),
+        ]);
+
+        $reference = $this->postJson('/api/v1/checkout', $this->payload())
+            ->assertCreated()
+            ->json('data.order_reference');
+
+        $this->getJson("/api/v1/orders/{$reference}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.invitation.public_path', null);
+    }
+
+    public function test_chip_callback_requires_rsa_signature_and_settles_server_verified_purchase(): void
+    {
+        $this->configureChip();
+        $privateKey = file_get_contents(base_path('tests/Fixtures/chip-callback-private.pem'));
+        $this->assertIsString($privateKey);
+        $keyPair = openssl_pkey_get_private($privateKey);
+        $this->assertNotFalse($keyPair);
+        $keyDetails = openssl_pkey_get_details($keyPair);
+        $publicKey = $keyDetails['key'];
+        $this->assertIsString($publicKey);
+
+        Http::fake([
+            'gate.chip-in.asia/api/v1/purchases/' => Http::response([
+                'id' => 'purchase-1',
+                'checkout_url' => 'https://gate.chip-in.asia/p/purchase-1/',
+            ], 201),
+            'gate.chip-in.asia/api/v1/public_key/' => Http::response(json_encode($publicKey), 200),
+            'gate.chip-in.asia/api/v1/purchases/purchase-1/' => Http::response($this->chipPurchase(), 200),
+        ]);
+        Cache::forget('chip.collect.public_key');
+
+        $reference = $this->postJson('/api/v1/checkout', $this->payload())
+            ->assertCreated()
+            ->json('data.order_reference');
+        $rawBody = json_encode(['id' => 'purchase-1', 'status' => 'paid', 'event_type' => 'purchase.paid']);
+        $this->assertIsString($rawBody);
+        $this->assertTrue(openssl_sign($rawBody, $signature, $privateKey, OPENSSL_ALGO_SHA256));
+        $headers = ['CONTENT_TYPE' => 'application/json', 'HTTP_X_SIGNATURE' => base64_encode($signature)];
+
+        $this->call('POST', '/api/v1/payments/chip/callback', [], [], [], array_replace($headers, ['HTTP_X_SIGNATURE' => 'invalid']), $rawBody)
+            ->assertForbidden();
+        $this->call('POST', '/api/v1/payments/chip/callback', [], [], [], $headers, $rawBody)->assertOk();
+        $this->call('POST', '/api/v1/payments/chip/callback', [], [], [], $headers, $rawBody)->assertOk();
+
+        $this->assertSame('paid', Order::where('reference', $reference)->value('status'));
+        $this->assertSame('published', Invitation::firstOrFail()->status);
+        $this->assertDatabaseHas('payment_webhook_events', [
+            'provider' => 'chip',
+            'event_reference' => 'chip:purchase-1:purchase.paid',
+            'processing_status' => 'processed',
+        ]);
     }
 
     public function test_premium_template_requires_premium_package(): void
@@ -366,7 +515,7 @@ class PaymentAndAdminTest extends TestCase
         $invitation->refresh();
         $this->assertTrue($invitation->rsvp_enabled);
         $this->assertTrue($invitation->guestbook_enabled);
-        $this->assertSame(\Carbon\CarbonImmutable::parse($invitation->content['date'])->addDays(30)->toDateString(), $invitation->expires_at->toDateString());
+        $this->assertSame(CarbonImmutable::parse($invitation->content['date'])->addDays(30)->toDateString(), $invitation->expires_at->toDateString());
         $this->postJson("/api/v1/invitations/public/{$invitation->slug}/wishes", ['name' => 'Guest', 'message' => 'Best wishes'])->assertCreated();
     }
 

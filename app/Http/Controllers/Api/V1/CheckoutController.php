@@ -10,6 +10,7 @@ use App\Models\Package;
 use App\Models\Template;
 use App\Models\Voucher;
 use App\Services\Billplz\BillplzClient;
+use App\Services\Chip\ChipClient;
 use App\Services\OrderPaymentService;
 use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,7 @@ use Throwable;
 
 class CheckoutController extends Controller
 {
-    public function store(Request $request, BillplzClient $billplz, OrderPaymentService $payments): JsonResponse
+    public function store(Request $request, BillplzClient $billplz, ChipClient $chip, OrderPaymentService $payments): JsonResponse
     {
         $user = auth('sanctum')->user();
         $needsCustomer = Rule::requiredIf(! $user);
@@ -74,11 +75,17 @@ class CheckoutController extends Controller
         }
 
         $free = $total === 0;
-        if (! $free && ! $billplz->configured()) {
+        $provider = config('services.payments.provider', 'chip');
+        $gatewayConfigured = match ($provider) {
+            'chip' => $chip->configured(),
+            'billplz' => $billplz->configured(),
+            default => false,
+        };
+        if (! $free && ! $gatewayConfigured) {
             return response()->json(['message' => 'Pembayaran belum dikonfigurasi.'], 503);
         }
 
-        [$order, $customer] = DB::transaction(function () use ($user, $details, $validated, $template, $package, $content, $voucher, $discount, $total) {
+        [$order, $customer] = DB::transaction(function () use ($user, $details, $validated, $template, $package, $content, $voucher, $discount, $total, $provider) {
             $customer = Customer::capture(
                 $details['name'] ?? $user->name,
                 $details['email'] ?? $user->email,
@@ -131,7 +138,7 @@ class CheckoutController extends Controller
                 'amount_sen' => $total,
                 'currency' => $package->currency,
                 'status' => 'pending',
-                'provider' => $total === 0 ? 'voucher' : 'billplz',
+                'provider' => $total === 0 ? 'voucher' : $provider,
             ]);
 
             return [$order, $customer];
@@ -149,7 +156,15 @@ class CheckoutController extends Controller
         }
 
         try {
-            $bill = $billplz->createBill($order, $customer, 'JemputanKu - Pakej '.$package->name);
+            if ($provider === 'chip') {
+                $purchase = $chip->createPurchase($order, $customer, 'JemputanKu - Pakej '.$package->name);
+                $providerReference = $purchase['id'];
+                $paymentUrl = $purchase['checkout_url'];
+            } else {
+                $bill = $billplz->createBill($order, $customer, 'JemputanKu - Pakej '.$package->name);
+                $providerReference = $bill['id'];
+                $paymentUrl = $bill['url'];
+            }
         } catch (Throwable $exception) {
             report($exception);
             $order->update(['status' => 'failed']);
@@ -157,13 +172,14 @@ class CheckoutController extends Controller
             return response()->json(['message' => 'Gerbang pembayaran tidak dapat dihubungi. Sila cuba lagi.'], 502);
         }
 
-        $order->update(['provider_reference' => $bill['id'], 'payment_url' => $bill['url']]);
+        $order->update(['provider_reference' => $providerReference, 'payment_url' => $paymentUrl]);
 
         return response()->json(['data' => [
             'order_reference' => $order->reference,
             'payment_url' => $order->payment_url,
             'amount_sen' => $order->amount_sen,
             'status' => 'pending',
+            'payment_provider' => $provider,
         ]], 201);
     }
 

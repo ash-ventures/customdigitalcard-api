@@ -37,6 +37,18 @@ return [
         'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
     ],
 
+    'chip' => [
+        'api_key' => env('CHIP_API_KEY'),
+        'brand_id' => env('CHIP_BRAND_ID'),
+        'base_url' => env('CHIP_BASE_URL', 'https://gate.chip-in.asia/api/v1'),
+        'success_callback_url' => env('CHIP_SUCCESS_CALLBACK_URL'),
+        'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+    ],
+
+    'payments' => [
+        'provider' => env('PAYMENT_PROVIDER', 'chip'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Services\Billplz\BillplzClient;
+use App\Services\Chip\ChipClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -11,23 +12,25 @@ use Throwable;
 
 class OrderPaymentService
 {
-    public function __construct(private BillplzClient $billplz)
-    {
-    }
+    public function __construct(private BillplzClient $billplz, private ChipClient $chip) {}
 
-    /**
-     * Re-checks a pending order against Billplz; failures leave the order pending.
-     * Called on every GET /orders/{reference} (the status page polls this every 3s).
-     * DEBUG: errors are written to storage/logs/laravel.log; "Billplz getBill" debug lines show what Billplz returned.
-     */
+    /** Re-checks a pending order with the provider saved on that order. */
     public function sync(Order $order): Order
     {
-        // Throttle: clients poll often, but Billplz is queried at most once per 2s per order.
         $recentlySynced = $order->last_synced_at && $order->last_synced_at->gt(now()->subSeconds(2));
 
         if ($order->status === 'pending' && $order->provider_reference && ! $recentlySynced) {
             try {
-                $this->settle($order, $this->billplz->getBill($order->provider_reference));
+                if ($order->provider === 'billplz') {
+                    $this->settle($order, $this->billplz->getBill($order->provider_reference));
+                } elseif ($order->provider === 'chip') {
+                    $purchase = $this->chip->getPurchase($order->provider_reference);
+                    if (($purchase['status'] ?? null) === 'paid') {
+                        $this->settleChip($order, $purchase);
+                    } elseif (in_array($purchase['status'] ?? null, ['cancelled', 'expired', 'failed', 'error'], true)) {
+                        $order->forceFill(['status' => 'cancelled'])->save();
+                    }
+                }
             } catch (Throwable $exception) {
                 report($exception);
             }
@@ -70,7 +73,8 @@ class OrderPaymentService
             // Paid means Billplz reports paid=true AND state=paid, for our bill, in our collection.
             $paid = filter_var($bill['paid'] ?? false, FILTER_VALIDATE_BOOLEAN)
                 && (($bill['state'] ?? 'paid') === 'paid')
-                && (($bill['collection_id'] ?? config('services.billplz.collection_id')) === config('services.billplz.collection_id'));
+                && (($bill['collection_id'] ?? config('services.billplz.collection_id')) === config('services.billplz.collection_id'))
+                && $order->provider === 'billplz';
             $sameBill = ($bill['id'] ?? null) === $order->provider_reference;
             $amountOk = (int) ($bill['amount'] ?? -1) === $order->amount_sen
                 && (! isset($bill['paid_amount']) || (int) $bill['paid_amount'] >= $order->amount_sen);
@@ -87,6 +91,62 @@ class OrderPaymentService
 
             return true;
         });
+    }
+
+    public function settleChip(Order $order, array $purchase): bool
+    {
+        return DB::transaction(function () use ($order, $purchase): bool {
+            $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if ($order->status === 'paid') {
+                return true;
+            }
+
+            $purchaseId = $purchase['id'] ?? null;
+            $status = $purchase['status'] ?? null;
+            $purchaseDetails = is_array($purchase['purchase'] ?? null) ? $purchase['purchase'] : [];
+            $currency = $purchaseDetails['currency'] ?? $purchase['currency'] ?? null;
+            $amount = $purchaseDetails['total'] ?? $purchase['total'] ?? null;
+
+            if (! $this->isIntegerAmount($amount) && is_array($purchaseDetails['products'] ?? null)) {
+                $prices = array_map(
+                    fn ($product) => is_array($product) ? ($product['price'] ?? null) : null,
+                    $purchaseDetails['products'],
+                );
+                if ($prices !== [] && count(array_filter($prices, fn ($price) => $this->isIntegerAmount($price))) === count($prices)) {
+                    $amount = array_sum(array_map('intval', $prices));
+                }
+            }
+
+            $valid = $order->provider === 'chip'
+                && $purchaseId === $order->provider_reference
+                && $status === 'paid'
+                && $this->isIntegerAmount($amount)
+                && (int) $amount === $order->amount_sen
+                && (! is_string($currency) || strtoupper($currency) === strtoupper($order->currency));
+
+            if (! $valid) {
+                Log::warning('CHIP payment settlement rejected', [
+                    'order' => $order->reference,
+                    'purchase_id_matches' => $purchaseId === $order->provider_reference,
+                    'status' => $status,
+                    'amount_matches' => $this->isIntegerAmount($amount) && (int) $amount === $order->amount_sen,
+                    'currency' => $currency,
+                ]);
+
+                return false;
+            }
+
+            $order->forceFill(['status' => 'paid', 'paid_at' => now()])->save();
+            $this->publish($order);
+
+            return true;
+        });
+    }
+
+    private function isIntegerAmount(mixed $amount): bool
+    {
+        return is_int($amount) || (is_string($amount) && preg_match('/^\d+$/D', $amount) === 1);
     }
 
     private function publish(Order $order): void

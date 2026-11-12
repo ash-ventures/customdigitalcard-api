@@ -18,6 +18,7 @@ class VoucherTest extends TestCase
         parent::setUp();
         $this->seed();
         config([
+            'services.payments.provider' => 'billplz',
             'services.billplz.api_key' => 'test-key',
             'services.billplz.collection_id' => 'col123',
             'services.billplz.x_signature_key' => 'sig-secret',
