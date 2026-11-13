@@ -58,6 +58,7 @@ class InvitationSupport
             "$prefix.design" => ['nullable', 'array'],
             "$prefix.design.nameFont" => ['nullable', 'in:'.implode(',', self::NAME_FONTS)],
             "$prefix.design.primary" => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            "$prefix.design.bodyTextColor" => ['nullable', 'regex:/^(primary|#[0-9a-fA-F]{6})$/'],
             "$prefix.design.accent" => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             "$prefix.design.nameScale" => ['nullable', 'integer', 'between:60,150'],
             "$prefix.design.nameWeight" => ['nullable', 'integer', 'in:300,400,500,600,700'],

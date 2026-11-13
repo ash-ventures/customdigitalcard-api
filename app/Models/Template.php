@@ -66,6 +66,7 @@ class Template extends Model
             'sort_order' => $this->sort_order,
             'mood' => $this->configuration['mood'] ?? null,
             'text_tone' => $this->configuration['text_tone'] ?? null,
+            'accent_color' => $this->configuration['accent_color'] ?? null,
             'background_url' => $this->backgroundUrl(),
         ];
     }

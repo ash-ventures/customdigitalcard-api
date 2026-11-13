@@ -40,7 +40,7 @@ class InvitationApiTest extends TestCase
     public function test_design_and_end_time_are_validated_and_stored(): void
     {
         $owner = User::factory()->create();
-        $design = ['nameFont' => 'allura', 'primary' => '#aa2244', 'accent' => '#cc8899', 'nameScale' => 120, 'nameWeight' => 500, 'textScale' => 110, 'letterSpacing' => 0.5, 'textAlign' => 'left', 'lineHeight' => 155, 'bodyFont' => 'playfair', 'textTone' => 'light', 'backgroundColor' => '#fff8ef', 'floralScale' => 110, 'floralOffsetX' => 4, 'floralOffsetY' => -2, 'floralRotation' => 6, 'floralOpacity' => 75, 'intro' => true, 'motion' => false];
+        $design = ['nameFont' => 'allura', 'primary' => '#aa2244', 'bodyTextColor' => '#174f74', 'accent' => '#cc8899', 'nameScale' => 120, 'nameWeight' => 500, 'textScale' => 110, 'letterSpacing' => 0.5, 'textAlign' => 'left', 'lineHeight' => 155, 'bodyFont' => 'playfair', 'textTone' => 'light', 'backgroundColor' => '#fff8ef', 'floralScale' => 110, 'floralOffsetX' => 4, 'floralOffsetY' => -2, 'floralRotation' => 6, 'floralOpacity' => 75, 'intro' => true, 'motion' => false];
 
         $id = $this->actingAs($owner)->postJson('/api/v1/me/invitations', [
             'template' => 'mawar-sutra',
@@ -67,12 +67,13 @@ class InvitationApiTest extends TestCase
             ->assertJsonPath('data.content.schedule.0.mapsUrl', 'https://maps.google.com/?q=dewan')
             ->assertJsonPath('data.content.design.nameFont', 'allura')
             ->assertJsonPath('data.content.design.bodyFont', 'playfair')
+            ->assertJsonPath('data.content.design.bodyTextColor', '#174f74')
             ->assertJsonPath('data.content.design.nameWeight', 500)
             ->assertJsonPath('data.content.design.letterSpacing', 0.5)
             ->assertJsonPath('data.content.rsvpDeadline', '2027-01-01')
             ->json('data.id');
 
-        foreach ([['nameFont' => 'comic-sans'], ['primary' => 'red'], ['nameScale' => 400], ['nameWeight' => 800], ['textScale' => 200], ['letterSpacing' => 4], ['textAlign' => 'justify'], ['lineHeight' => 200], ['bodyFont' => 'comic-sans'], ['textTone' => 'neon'], ['backgroundColor' => 'ivory'], ['floralScale' => 200], ['background' => 'data:image/svg+xml;base64,AAAA']] as $bad) {
+        foreach ([['nameFont' => 'comic-sans'], ['primary' => 'red'], ['bodyTextColor' => 'red'], ['nameScale' => 400], ['nameWeight' => 800], ['textScale' => 200], ['letterSpacing' => 4], ['textAlign' => 'justify'], ['lineHeight' => 200], ['bodyFont' => 'comic-sans'], ['textTone' => 'neon'], ['backgroundColor' => 'ivory'], ['floralScale' => 200], ['background' => 'data:image/svg+xml;base64,AAAA']] as $bad) {
             $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => ['design' => $bad]])->assertUnprocessable();
         }
         $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => ['endTime' => '25:99']])->assertUnprocessable();

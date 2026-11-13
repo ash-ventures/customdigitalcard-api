@@ -76,7 +76,7 @@ class CardDesignController extends Controller
                 'description' => $data['description'] ?? '',
                 'is_premium' => $data['is_premium'] ?? false,
                 'is_active' => $data['is_active'] ?? true,
-                'configuration' => [...array_diff_key($template->configuration ?? [], ['mood' => 1, 'text_tone' => 1]), ...$this->configuration($data)],
+                'configuration' => [...array_diff_key($template->configuration ?? [], ['mood' => 1, 'text_tone' => 1, 'accent_color' => 1]), ...$this->configuration($data)],
             ]);
             if ($background) {
                 $this->storeBackground($template, $background);
@@ -185,6 +185,7 @@ class CardDesignController extends Controller
             'description' => ['nullable', 'string', 'max:300'],
             'mood' => ['nullable', 'string', 'max:80'],
             'text_tone' => ['nullable', Rule::in(['dark', 'light'])],
+            'accent_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'is_premium' => ['boolean'],
             'is_active' => ['boolean'],
         ]);
@@ -195,6 +196,7 @@ class CardDesignController extends Controller
         return array_filter([
             'mood' => $data['mood'] ?? null,
             'text_tone' => $data['text_tone'] ?? null,
+            'accent_color' => $data['accent_color'] ?? null,
         ], fn ($value) => filled($value));
     }
 
