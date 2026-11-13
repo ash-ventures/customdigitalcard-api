@@ -154,4 +154,28 @@ class InvitationSupport
         // Old links (/i/{slug}) are redirected by the frontend (next.config.ts).
         return $invitation->status === 'published' ? '/jemputan/'.$invitation->slug : null;
     }
+
+    public static function supportPath(Invitation $invitation): ?string
+    {
+        $appKey = config('app.key');
+        if ($invitation->status !== 'pending_payment' || ! is_string($appKey) || $appKey === '') {
+            return null;
+        }
+
+        $token = hash_hmac('sha256', 'invitation-support:'.$invitation->slug, $appKey);
+
+        return '/jemputan/'.$invitation->slug.'?support='.rawurlencode($token);
+    }
+
+    public static function hasValidSupportToken(Invitation $invitation, ?string $token): bool
+    {
+        $appKey = config('app.key');
+        if ($invitation->status !== 'pending_payment' || ! is_string($appKey) || $appKey === '' || ! is_string($token)) {
+            return false;
+        }
+
+        $expected = hash_hmac('sha256', 'invitation-support:'.$invitation->slug, $appKey);
+
+        return hash_equals($expected, $token);
+    }
 }

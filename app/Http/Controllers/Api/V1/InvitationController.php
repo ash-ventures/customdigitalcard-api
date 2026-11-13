@@ -4,29 +4,35 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Invitation;
+use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class InvitationController extends Controller
 {
-    public function publicShow(string $slug): JsonResponse
+    public function publicShow(Request $request, string $slug): JsonResponse
     {
         $invitation = Invitation::query()
             ->where('slug', $slug)
-            ->where('status', 'published')
-            ->where(function ($query) {
-                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
-            })
             ->with('template')
             ->firstOrFail();
+
+        $supportPreview = $invitation->status === 'pending_payment'
+            && InvitationSupport::hasValidSupportToken($invitation, $request->query('support'));
+        $published = $invitation->status === 'published'
+            && (! $invitation->expires_at || $invitation->expires_at->isFuture());
+
+        abort_unless($published || $supportPreview, 404);
 
         return response()->json([
             'data' => [
                 'slug' => $invitation->slug,
                 'content' => $invitation->content,
-                'rsvp_enabled' => $invitation->rsvp_enabled,
-                'guestbook_enabled' => $invitation->guestbook_enabled,
+                'rsvp_enabled' => ! $supportPreview && $invitation->rsvp_enabled,
+                'guestbook_enabled' => ! $supportPreview && $invitation->guestbook_enabled,
                 'rsvp_deadline' => $invitation->rsvp_deadline,
                 'expires_at' => $invitation->expires_at,
+                'support_preview' => $supportPreview,
                 'template' => $invitation->template->toCatalog(),
             ],
         ]);

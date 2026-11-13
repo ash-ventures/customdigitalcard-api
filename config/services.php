@@ -47,6 +47,12 @@ return [
 
     'payments' => [
         'provider' => env('PAYMENT_PROVIDER', 'chip'),
+        'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+    ],
+
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => env('TELEGRAM_CHAT_ID'),
     ],
 
     'slack' => [

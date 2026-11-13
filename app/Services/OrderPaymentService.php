@@ -12,7 +12,11 @@ use Throwable;
 
 class OrderPaymentService
 {
-    public function __construct(private BillplzClient $billplz, private ChipClient $chip) {}
+    public function __construct(
+        private BillplzClient $billplz,
+        private ChipClient $chip,
+        private TelegramPaymentNotifier $telegram,
+    ) {}
 
     /** Re-checks a pending order with the provider saved on that order. */
     public function sync(Order $order): Order
@@ -28,7 +32,7 @@ class OrderPaymentService
                     if (($purchase['status'] ?? null) === 'paid') {
                         $this->settleChip($order, $purchase);
                     } elseif (in_array($purchase['status'] ?? null, ['cancelled', 'expired', 'failed', 'error'], true)) {
-                        $order->forceFill(['status' => 'cancelled'])->save();
+                        $this->cancelPending($order);
                     }
                 }
             } catch (Throwable $exception) {
@@ -43,19 +47,26 @@ class OrderPaymentService
     /** Publishes an order whose total is fully covered by a voucher (no gateway involved). */
     public function settleFree(Order $order): void
     {
-        DB::transaction(function () use ($order): void {
+        $settled = false;
+        DB::transaction(function () use ($order, &$settled): void {
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
             if ($order->status === 'paid' || $order->amount_sen !== 0) {
                 return;
             }
             $order->forceFill(['status' => 'paid', 'paid_at' => now()])->save();
             $this->publish($order);
+            $settled = true;
         });
+
+        if ($settled) {
+            $this->telegram->notify($order->fresh(), 'success');
+        }
     }
 
     public function settle(Order $order, array $bill): bool
     {
-        return DB::transaction(function () use ($order, $bill): bool {
+        $outcome = null;
+        $settled = DB::transaction(function () use ($order, $bill, &$outcome): bool {
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             if ($order->status === 'paid') {
@@ -66,6 +77,7 @@ class OrderPaymentService
             if (($bill['state'] ?? null) === 'deleted' && $order->status === 'pending') {
                 $order->forceFill(['status' => 'cancelled'])->save();
                 Log::info('Billplz bill deleted, order cancelled', ['order' => $order->reference]);
+                $outcome = 'failed';
 
                 return false;
             }
@@ -88,14 +100,22 @@ class OrderPaymentService
 
             $order->forceFill(['status' => 'paid', 'paid_at' => now()])->save();
             $this->publish($order);
+            $outcome = 'success';
 
             return true;
         });
+
+        if ($outcome) {
+            $this->telegram->notify($order->fresh(), $outcome);
+        }
+
+        return $settled;
     }
 
     public function settleChip(Order $order, array $purchase): bool
     {
-        return DB::transaction(function () use ($order, $purchase): bool {
+        $outcome = null;
+        $settled = DB::transaction(function () use ($order, $purchase, &$outcome): bool {
             $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             if ($order->status === 'paid') {
@@ -139,9 +159,34 @@ class OrderPaymentService
 
             $order->forceFill(['status' => 'paid', 'paid_at' => now()])->save();
             $this->publish($order);
+            $outcome = 'success';
 
             return true;
         });
+
+        if ($outcome) {
+            $this->telegram->notify($order->fresh(), $outcome);
+        }
+
+        return $settled;
+    }
+
+    private function cancelPending(Order $order): void
+    {
+        $cancelled = DB::transaction(function () use ($order): bool {
+            $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== 'pending') {
+                return false;
+            }
+
+            $locked->forceFill(['status' => 'cancelled'])->save();
+
+            return true;
+        });
+
+        if ($cancelled) {
+            $this->telegram->notify($order->fresh(), 'failed');
+        }
     }
 
     private function isIntegerAmount(mixed $amount): bool

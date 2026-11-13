@@ -12,6 +12,7 @@ use App\Models\Voucher;
 use App\Services\Billplz\BillplzClient;
 use App\Services\Chip\ChipClient;
 use App\Services\OrderPaymentService;
+use App\Services\TelegramPaymentNotifier;
 use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ use Throwable;
 
 class CheckoutController extends Controller
 {
-    public function store(Request $request, BillplzClient $billplz, ChipClient $chip, OrderPaymentService $payments): JsonResponse
+    public function store(Request $request, BillplzClient $billplz, ChipClient $chip, OrderPaymentService $payments, TelegramPaymentNotifier $telegram): JsonResponse
     {
         $user = auth('sanctum')->user();
         $needsCustomer = Rule::requiredIf(! $user);
@@ -168,6 +169,7 @@ class CheckoutController extends Controller
         } catch (Throwable $exception) {
             report($exception);
             $order->update(['status' => 'failed']);
+            $telegram->notify($order->refresh(), 'failed');
 
             return response()->json(['message' => 'Gerbang pembayaran tidak dapat dihubungi. Sila cuba lagi.'], 502);
         }

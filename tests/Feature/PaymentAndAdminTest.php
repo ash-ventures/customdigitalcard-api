@@ -7,6 +7,7 @@ use App\Models\Invitation;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
+use App\Support\InvitationSupport;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -83,6 +84,7 @@ class PaymentAndAdminTest extends TestCase
         }
         $this->faked = true;
         Http::fake([
+            'api.telegram.org/bot*/sendMessage' => Http::response(['ok' => true], 200),
             'www.billplz-sandbox.com/api/v3/bills' => function () {
                 $id = 'bill_'.(++$this->billCounter);
 
@@ -261,10 +263,149 @@ class PaymentAndAdminTest extends TestCase
 
     public function test_gateway_error_marks_order_failed(): void
     {
-        Http::fake(['*' => Http::response(['error' => 'x'], 500)]);
+        config([
+            'services.telegram.bot_token' => 'test-token',
+            'services.telegram.chat_id' => 'admin-chat',
+            'services.payments.frontend_url' => 'https://cards.example.test',
+        ]);
+        Http::fake([
+            'api.telegram.org/bot*/sendMessage' => Http::response(['ok' => true], 200),
+            '*' => Http::response(['error' => 'x'], 500),
+        ]);
 
         $this->postJson('/api/v1/checkout', $this->payload())->assertStatus(502);
         $this->assertDatabaseHas('orders', ['status' => 'failed']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api.telegram.org/bot')
+            && $request['chat_id'] === 'admin-chat'
+            && str_contains($request['text'], 'PAYMENT FAILED')
+            && str_contains($request['text'], 'https://wa.me/60123456789?text=')
+            && str_contains($request['text'], 'Gateway reference: Not created')
+            && str_contains($request['text'], 'Card link: https://cards.example.test/jemputan/'));
+    }
+
+    public function test_pending_card_support_link_is_admin_only_and_read_only(): void
+    {
+        $reference = $this->checkout();
+        $invitation = Invitation::firstOrFail();
+
+        $this->getJson("/api/v1/orders/{$reference}")
+            ->assertOk()
+            ->assertJsonPath('data.reference', $reference)
+            ->assertJsonPath('data.invitation.public_path', null)
+            ->assertJsonMissingPath('data.provider_reference')
+            ->assertJsonMissingPath('data.invitation.support_path');
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}")->assertNotFound();
+
+        $admin = User::factory()->create();
+        $admin->forceFill(['is_admin' => true])->save();
+        $supportPath = InvitationSupport::supportPath($invitation);
+        $this->assertNotNull($supportPath);
+        $token = parse_url($supportPath, PHP_URL_QUERY);
+        parse_str((string) $token, $query);
+
+        $this->actingAs($admin)->getJson('/api/v1/admin/invitations')
+            ->assertOk()
+            ->assertJsonPath('data.0.support_path', $supportPath)
+            ->assertJsonPath('data.0.order.reference', $reference)
+            ->assertJsonPath('data.0.order.provider_reference', 'bill_1');
+
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}?support=invalid")->assertNotFound();
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}?support={$query['support']}")
+            ->assertOk()
+            ->assertJsonPath('data.support_preview', true)
+            ->assertJsonPath('data.rsvp_enabled', false)
+            ->assertJsonPath('data.guestbook_enabled', false);
+    }
+
+    public function test_paid_payment_sends_telegram_notification_with_admin_details_and_public_link(): void
+    {
+        config([
+            'services.telegram.bot_token' => 'test-token',
+            'services.telegram.chat_id' => 'admin-chat',
+            'services.payments.frontend_url' => 'https://cards.example.test',
+        ]);
+        $reference = $this->checkout();
+
+        $this->fakeBill(paid: true);
+        $this->getJson("/api/v1/orders/{$reference}")->assertJsonPath('data.status', 'paid');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api.telegram.org/bot')
+            && $request['chat_id'] === 'admin-chat'
+            && str_contains($request['text'], 'PAYMENT SUCCESS')
+            && str_contains($request['text'], 'Aminah Ali')
+            && str_contains($request['text'], '012-345 6789')
+            && str_contains($request['text'], 'aminah@example.test')
+            && str_contains($request['text'], 'Asas')
+            && str_contains($request['text'], 'Voucher: None')
+            && str_contains($request['text'], $reference)
+            && str_contains($request['text'], 'Payment recorded at: ')
+            && str_contains($request['text'], 'https://wa.me/60123456789?text=')
+            && str_contains($request['text'], 'Gateway reference: bill_1')
+            && str_contains($request['text'], 'Card link: https://cards.example.test/jemputan/'));
+
+        Http::assertSent(function ($request) use ($reference): bool {
+            if (! str_contains($request->url(), 'api.telegram.org/bot')) {
+                return false;
+            }
+            $whatsappLine = collect(explode("\n", (string) $request['text']))
+                ->first(fn (string $line): bool => str_starts_with($line, 'WhatsApp: '));
+            if (! is_string($whatsappLine)) {
+                return false;
+            }
+            $query = [];
+            parse_str((string) parse_url(substr($whatsappLine, strlen('WhatsApp: ')), PHP_URL_QUERY), $query);
+
+            return isset($query['text'])
+                && str_contains($query['text'], 'Payment status: Success')
+                && str_contains($query['text'], 'Full name: Aminah Ali')
+                && str_contains($query['text'], 'Phone: 012-345 6789')
+                && str_contains($query['text'], 'Email: aminah@example.test')
+                && str_contains($query['text'], 'Package: Asas')
+                && str_contains($query['text'], 'Total: RM 19.00')
+                && str_contains($query['text'], 'Voucher: None')
+                && str_contains($query['text'], 'Order reference: '.$reference)
+                && str_contains($query['text'], 'Payment recorded at: ')
+                && ! str_contains($query['text'], 'Gateway reference:')
+                && ! str_contains($query['text'], 'Card link:');
+        });
+    }
+
+    public function test_cancelled_payment_sends_telegram_notification_with_support_link(): void
+    {
+        $this->configureChip();
+        config([
+            'services.telegram.bot_token' => 'test-token',
+            'services.telegram.chat_id' => 'admin-chat',
+            'services.payments.frontend_url' => 'https://cards.example.test',
+        ]);
+        Http::fake([
+            'api.telegram.org/bot*/sendMessage' => Http::response(['ok' => true], 200),
+            'gate.chip-in.asia/api/v1/purchases/' => Http::response([
+                'id' => 'purchase-failed',
+                'checkout_url' => 'https://gate.chip-in.asia/p/purchase-failed/',
+            ], 201),
+            'gate.chip-in.asia/api/v1/purchases/purchase-failed/' => Http::response([
+                'id' => 'purchase-failed',
+                'status' => 'cancelled',
+            ], 200),
+        ]);
+
+        $reference = $this->postJson('/api/v1/checkout', $this->payload())
+            ->assertCreated()
+            ->json('data.order_reference');
+        $this->getJson("/api/v1/orders/{$reference}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled')
+            ->assertJsonPath('data.invitation.public_path', null)
+            ->assertJsonMissingPath('data.provider_reference');
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api.telegram.org/bot')
+            && $request['chat_id'] === 'admin-chat'
+            && str_contains($request['text'], 'PAYMENT FAILED')
+            && str_contains($request['text'], $reference)
+            && str_contains($request['text'], 'https://wa.me/60123456789?text=')
+            && str_contains($request['text'], 'Gateway reference: purchase-failed')
+            && str_contains($request['text'], 'Card link: https://cards.example.test/jemputan/'));
     }
 
     public function test_paid_bill_publishes_invitation_and_exposes_unique_link(): void
