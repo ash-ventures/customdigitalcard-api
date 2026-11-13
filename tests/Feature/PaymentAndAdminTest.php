@@ -52,7 +52,7 @@ class PaymentAndAdminTest extends TestCase
             'purchase' => [
                 'total' => $amount,
                 'currency' => 'MYR',
-                'products' => [['name' => 'JemputanKu - Pakej Asas', 'price' => $amount]],
+                'products' => [['name' => 'Majlis Digital - Pakej Asas', 'price' => $amount]],
             ],
         ];
     }

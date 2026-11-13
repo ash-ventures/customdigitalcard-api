@@ -48,7 +48,7 @@ class TelegramPaymentNotifier
         $cardUrl = $cardPath ? $frontendUrl.$cardPath : 'Unavailable';
         $gatewayReference = $order->provider_reference ?: 'Not created';
         $whatsappUrl = $this->whatsappUrl($customerPhone, implode("\n", [
-            'Hello '.$customerName.', this is about your JemputanKu payment.',
+            'Hello '.$customerName.', this is about your Majlis Digital payment.',
             'Payment status: '.($successful ? 'Success' : 'Failed'),
             'Full name: '.$customerName,
             'Phone: '.$customerPhone,

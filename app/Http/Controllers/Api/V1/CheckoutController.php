@@ -158,11 +158,11 @@ class CheckoutController extends Controller
 
         try {
             if ($provider === 'chip') {
-                $purchase = $chip->createPurchase($order, $customer, 'JemputanKu - Pakej '.$package->name);
+                $purchase = $chip->createPurchase($order, $customer, 'Majlis Digital - Pakej '.$package->name);
                 $providerReference = $purchase['id'];
                 $paymentUrl = $purchase['checkout_url'];
             } else {
-                $bill = $billplz->createBill($order, $customer, 'JemputanKu - Pakej '.$package->name);
+                $bill = $billplz->createBill($order, $customer, 'Majlis Digital - Pakej '.$package->name);
                 $providerReference = $bill['id'];
                 $paymentUrl = $bill['url'];
             }
