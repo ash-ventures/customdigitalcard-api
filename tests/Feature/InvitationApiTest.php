@@ -82,6 +82,57 @@ class InvitationApiTest extends TestCase
         $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => ['schedule' => ['not-an-event']]])->assertUnprocessable();
     }
 
+    public function test_luxury_flow_settings_are_validated_and_stored(): void
+    {
+        $owner = User::factory()->create();
+
+        $id = $this->actingAs($owner)->postJson('/api/v1/me/invitations', [
+            'template' => 'mawar-sutra',
+            'content' => [
+                'bride' => 'Alya',
+                'groom' => 'Hakim',
+                'flow' => 'storyboard',
+                'hostsLine' => 'Encik Ahmad & Puan Aminah',
+                'hostsIntro' => 'Kami menjemput anda ke majlis perkahwinan anakanda kami',
+                'salamText' => 'Assalamualaikum Warahmatullahi Wabarakatuh',
+                'prayerText' => 'Ya Allah, berkatilah majlis ini',
+                'venueNote' => 'Parking di aras 2',
+                'storyboard' => [
+                    'cover' => 'curtain',
+                    'hero' => 'crest',
+                    'petals' => 'lush',
+                    'dock' => 'ink',
+                    'monogram' => 'letter',
+                    'accent' => 'rose',
+                    'timeline' => 'cards',
+                    'motion' => false,
+                    'showPrayer' => false,
+                ],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('data.content.flow', 'storyboard')
+            ->assertJsonPath('data.content.hostsLine', 'Encik Ahmad & Puan Aminah')
+            ->assertJsonPath('data.content.prayerText', 'Ya Allah, berkatilah majlis ini')
+            ->assertJsonPath('data.content.venueNote', 'Parking di aras 2')
+            ->assertJsonPath('data.content.storyboard.cover', 'curtain')
+            ->assertJsonPath('data.content.storyboard.accent', 'rose')
+            ->assertJsonPath('data.content.storyboard.timeline', 'cards')
+            ->assertJsonPath('data.content.storyboard.motion', false)
+            ->assertJsonPath('data.content.storyboard.showPrayer', false)
+            ->json('data.id');
+
+        foreach ([
+            ['flow' => 'cinema'],
+            ['storyboard' => ['cover' => 'explode']],
+            ['storyboard' => ['accent' => 'rainbow']],
+            ['storyboard' => ['timeline' => 'zigzag']],
+            ['storyboard' => ['monogram' => 'signature']],
+            ['hostsLine' => str_repeat('a', 200)],
+        ] as $bad) {
+            $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => $bad])->assertUnprocessable();
+        }
+    }
+
     public function test_invitation_management_requires_authentication(): void
     {
         $this->getJson('/api/v1/me/invitations')->assertUnauthorized();
