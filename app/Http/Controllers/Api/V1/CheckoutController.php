@@ -214,7 +214,11 @@ class CheckoutController extends Controller
 
     public function status(string $reference, OrderPaymentService $payments): JsonResponse
     {
-        $order = Order::query()->where('reference', $reference)->with(['package:id,slug,name', 'invitation'])->firstOrFail();
+        $order = Order::query()->where('reference', $reference)->with(['package:id,slug,name', 'invitation'])->first();
+        if (! $order) {
+            return response()->json(['message' => 'Pesanan tidak ditemui. Sila semak pautan status bayaran anda.'], 404);
+        }
+
         $order = $payments->sync($order)->load('invitation');
         $invitation = $order->invitation;
 

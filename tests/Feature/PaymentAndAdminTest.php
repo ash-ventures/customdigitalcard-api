@@ -166,6 +166,49 @@ class PaymentAndAdminTest extends TestCase
         ]);
     }
 
+    public function test_chip_checkout_uses_dedicated_frontend_url_for_both_redirects(): void
+    {
+        $this->configureChip();
+        config(['services.chip.frontend_url' => 'https://cards.example.test']);
+        Http::fake([
+            'gate.chip-in.asia/api/v1/purchases/' => Http::response([
+                'id' => 'purchase-1',
+                'checkout_url' => 'https://gate.chip-in.asia/p/purchase-1/',
+            ], 201),
+        ]);
+
+        $reference = $this->postJson('/api/v1/checkout', $this->payload())
+            ->assertCreated()
+            ->json('data.order_reference');
+
+        Http::assertSent(fn ($request) => $request['success_redirect'] === "https://cards.example.test/bayaran/status?ref={$reference}"
+            && $request['failure_redirect'] === "https://cards.example.test/bayaran/status?ref={$reference}");
+    }
+
+    public function test_chip_checkout_rejects_localhost_return_url_in_production(): void
+    {
+        $this->configureChip();
+        config([
+            'app.env' => 'production',
+            'services.chip.frontend_url' => 'http://localhost:3000',
+        ]);
+        Http::fake();
+
+        $this->postJson('/api/v1/checkout', $this->payload())
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'Pembayaran belum dikonfigurasi.');
+
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_missing_order_status_returns_a_clean_not_found_response(): void
+    {
+        $this->getJson('/api/v1/orders/JK-DOESNOTEXIST')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Pesanan tidak ditemui. Sila semak pautan status bayaran anda.');
+    }
+
     public function test_chip_purchase_is_verified_server_side_before_publishing(): void
     {
         $this->configureChip();

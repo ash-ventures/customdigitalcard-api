@@ -13,7 +13,9 @@ class ChipClient
 {
     public function configured(): bool
     {
-        return filled(config('services.chip.api_key')) && filled(config('services.chip.brand_id'));
+        return filled(config('services.chip.api_key'))
+            && filled(config('services.chip.brand_id'))
+            && $this->frontendUrl() !== null;
     }
 
     public function createPurchase(Order $order, Customer $customer, string $description): array
@@ -87,7 +89,35 @@ class ChipClient
 
     private function redirectUrl(Order $order): string
     {
-        return rtrim((string) config('services.chip.frontend_url'), '/').'/bayaran/status?ref='.rawurlencode($order->reference);
+        $frontendUrl = $this->frontendUrl();
+        if ($frontendUrl === null) {
+            throw new RuntimeException('CHIP_FRONTEND_URL must be a public HTTPS URL in production.');
+        }
+
+        return $frontendUrl.'/bayaran/status?ref='.rawurlencode($order->reference);
+    }
+
+    private function frontendUrl(): ?string
+    {
+        $frontendUrl = rtrim((string) config('services.chip.frontend_url'), '/');
+        $scheme = parse_url($frontendUrl, PHP_URL_SCHEME);
+        $host = parse_url($frontendUrl, PHP_URL_HOST);
+        if (! is_string($scheme) || ! in_array(strtolower($scheme), ['http', 'https'], true)
+            || ! is_string($host) || $host === '') {
+            return null;
+        }
+
+        $scheme = strtolower($scheme);
+        if (config('app.env') === 'production') {
+            $host = strtolower(trim($host, '[]'));
+            if ($scheme !== 'https'
+                || in_array($host, ['localhost', '127.0.0.1', '::1'], true)
+                || str_ends_with($host, '.localhost')) {
+                return null;
+            }
+        }
+
+        return $frontendUrl;
     }
 
     private function http(): PendingRequest

@@ -42,7 +42,7 @@ return [
         'brand_id' => env('CHIP_BRAND_ID'),
         'base_url' => env('CHIP_BASE_URL', 'https://gate.chip-in.asia/api/v1'),
         'success_callback_url' => env('CHIP_SUCCESS_CALLBACK_URL'),
-        'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+        'frontend_url' => env('CHIP_FRONTEND_URL', env('FRONTEND_URL', 'http://localhost:3000')),
     ],
 
     'payments' => [
