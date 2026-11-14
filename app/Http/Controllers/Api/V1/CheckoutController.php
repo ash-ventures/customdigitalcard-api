@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Invitation;
 use App\Models\Order;
 use App\Models\Package;
+use App\Models\PaymentSetting;
 use App\Models\Template;
 use App\Models\Voucher;
 use App\Services\Billplz\BillplzClient;
@@ -76,17 +77,25 @@ class CheckoutController extends Controller
         }
 
         $free = $total === 0;
-        $provider = config('services.payments.provider', 'chip');
+        $paymentSetting = PaymentSetting::current();
+        $provider = $paymentSetting?->provider ?? config('services.payments.provider', 'chip');
+        $manualInstructions = $provider === 'manual'
+            ? $paymentSetting?->manualInstructions()
+            : null;
         $gatewayConfigured = match ($provider) {
             'chip' => $chip->configured(),
             'billplz' => $billplz->configured(),
+            'manual' => $manualInstructions !== null
+                && (($manualInstructions['qr_url'] ?? null)
+                    || (filled($manualInstructions['bank_name'] ?? null)
+                        && filled($manualInstructions['account_number'] ?? null))),
             default => false,
         };
         if (! $free && ! $gatewayConfigured) {
             return response()->json(['message' => 'Pembayaran belum dikonfigurasi.'], 503);
         }
 
-        [$order, $customer] = DB::transaction(function () use ($user, $details, $validated, $template, $package, $content, $voucher, $discount, $total, $provider) {
+        [$order, $customer] = DB::transaction(function () use ($user, $details, $validated, $template, $package, $content, $voucher, $discount, $total, $provider, $manualInstructions) {
             $customer = Customer::capture(
                 $details['name'] ?? $user->name,
                 $details['email'] ?? $user->email,
@@ -140,6 +149,7 @@ class CheckoutController extends Controller
                 'currency' => $package->currency,
                 'status' => 'pending',
                 'provider' => $total === 0 ? 'voucher' : $provider,
+                'payment_instructions' => $total > 0 && $provider === 'manual' ? $manualInstructions : null,
             ]);
 
             return [$order, $customer];
@@ -153,6 +163,17 @@ class CheckoutController extends Controller
                 'payment_url' => null,
                 'amount_sen' => 0,
                 'status' => 'paid',
+            ]], 201);
+        }
+
+        if ($provider === 'manual') {
+            return response()->json(['data' => [
+                'order_reference' => $order->reference,
+                'payment_url' => null,
+                'amount_sen' => $order->amount_sen,
+                'status' => 'pending',
+                'payment_provider' => 'manual',
+                'payment_instructions' => $order->payment_instructions,
             ]], 201);
         }
 
@@ -200,6 +221,10 @@ class CheckoutController extends Controller
             'package' => $order->package->only(['slug', 'name']),
             'paid_at' => $order->paid_at,
             'payment_url' => $order->status === 'pending' ? $order->payment_url : null,
+            'payment_provider' => $order->provider,
+            'payment_instructions' => $order->status === 'pending' && $order->provider === 'manual'
+                ? $order->payment_instructions
+                : null,
             'invitation' => [
                 'slug' => $invitation->slug,
                 'public_path' => $order->status === 'paid' ? InvitationSupport::publicPath($invitation) : null,

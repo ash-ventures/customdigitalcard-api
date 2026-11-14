@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\MeInvitationController;
 use App\Http\Controllers\Api\V1\PackageAdminController;
 use App\Http\Controllers\Api\V1\PaymentCallbackController;
+use App\Http\Controllers\Api\V1\PaymentSettingsController;
 use App\Http\Controllers\Api\V1\RsvpController;
 use App\Http\Controllers\Api\V1\VoucherController;
 use App\Http\Controllers\Api\V1\WishController;
@@ -21,6 +22,8 @@ Route::prefix('v1')->group(function () {
     Route::get('/templates/{code}/background', [CardDesignController::class, 'background'])
         ->where('code', 'TPL-[0-9]+');
     Route::get('/packages', [CatalogController::class, 'packages']);
+    Route::get('/payment-settings/qr/{filename}', [PaymentSettingsController::class, 'qr'])
+        ->where('filename', '[A-Za-z0-9._-]+');
     Route::get('/invitations/public/{slug}', [InvitationController::class, 'publicShow'])
         ->where('slug', '[a-z0-9-]+');
     Route::post('/invitations/public/{slug}/rsvp', [RsvpController::class, 'store'])
@@ -63,6 +66,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/me/invitations/{invitation}/responses/export', [GuestResponseController::class, 'export'])->middleware('throttle:20,1');
 
         Route::prefix('admin')->middleware('admin')->group(function () {
+            Route::get('/payment-settings', [PaymentSettingsController::class, 'show']);
+            Route::post('/payment-settings', [PaymentSettingsController::class, 'update']);
             Route::get('/packages', [PackageAdminController::class, 'index']);
             Route::put('/packages/{package}', [PackageAdminController::class, 'update']);
             Route::get('/vouchers', [VoucherController::class, 'index']);
@@ -84,6 +89,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/orders', [AdminController::class, 'orders']);
             Route::get('/orders/{order}', [AdminController::class, 'order']);
             Route::post('/orders/{order}/sync', [AdminController::class, 'syncOrder']);
+            Route::post('/orders/{order}/confirm-manual-payment', [AdminController::class, 'confirmManualPayment']);
             Route::get('/invitations', [AdminController::class, 'invitations']);
             Route::get('/invitations/{invitation}', [AdminController::class, 'invitation']);
             Route::get('/invitations/{invitation}/responses', [GuestResponseController::class, 'adminIndex']);

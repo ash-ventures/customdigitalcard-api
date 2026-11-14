@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Invitation;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\OrderPaymentService;
 use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
@@ -99,6 +100,22 @@ class AdminController extends Controller
     public function syncOrder(Order $order, OrderPaymentService $payments): JsonResponse
     {
         $order = $payments->sync($order)->load(['customer', 'package', 'invitation.template']);
+
+        return response()->json(['data' => $this->orderRow($order)]);
+    }
+
+    public function confirmManualPayment(Request $request, Order $order, OrderPaymentService $payments): JsonResponse
+    {
+        $admin = $request->user();
+        abort_unless($admin instanceof User, 403);
+
+        if (! $payments->confirmManual($order, $admin)) {
+            return response()->json([
+                'message' => 'Only pending manual-payment orders can be confirmed.',
+            ], 422);
+        }
+
+        $order->refresh()->load(['customer', 'package', 'invitation.template']);
 
         return response()->json(['data' => $this->orderRow($order)]);
     }
@@ -199,6 +216,7 @@ class AdminController extends Controller
             'id' => $o->id,
             'reference' => $o->reference,
             'status' => $o->status,
+            'provider' => $o->provider,
             'amount_sen' => $o->amount_sen,
             'discount_sen' => (int) $o->discount_sen,
             'voucher_code' => $o->voucher_code,

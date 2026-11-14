@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\User;
 use App\Services\Billplz\BillplzClient;
 use App\Services\Chip\ChipClient;
 use Carbon\CarbonImmutable;
@@ -61,6 +62,47 @@ class OrderPaymentService
         if ($settled) {
             $this->telegram->notify($order->fresh(), 'success');
         }
+    }
+
+    /** Publishes a manual-payment order only after an administrator confirms receipt. */
+    public function confirmManual(Order $order, User $admin): bool
+    {
+        $confirmed = false;
+        $settled = DB::transaction(function () use ($order, $admin, &$confirmed): bool {
+            $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->provider !== 'manual') {
+                return false;
+            }
+            if ($locked->status === 'paid') {
+                return true;
+            }
+            if ($locked->status !== 'pending') {
+                return false;
+            }
+
+            $locked->forceFill([
+                'status' => 'paid',
+                'paid_at' => now(),
+                'manual_confirmed_by' => $admin->id,
+                'manual_confirmed_at' => now(),
+            ])->save();
+            $this->publish($locked);
+            $confirmed = true;
+
+            Log::info('Manual payment confirmed by administrator', [
+                'order' => $locked->reference,
+                'admin_id' => $admin->id,
+            ]);
+
+            return true;
+        });
+
+        if ($confirmed) {
+            $this->telegram->notify($order->fresh(), 'success');
+        }
+
+        return $settled;
     }
 
     public function settle(Order $order, array $bill): bool

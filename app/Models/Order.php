@@ -24,13 +24,22 @@ class Order extends Model
         'provider',
         'provider_reference',
         'payment_url',
+        'payment_instructions',
         'paid_at',
+        'manual_confirmed_by',
+        'manual_confirmed_at',
         'last_synced_at',
     ];
 
     protected function casts(): array
     {
-        return ['paid_at' => 'datetime', 'last_synced_at' => 'datetime', 'package_snapshot' => 'array'];
+        return [
+            'paid_at' => 'datetime',
+            'manual_confirmed_at' => 'datetime',
+            'last_synced_at' => 'datetime',
+            'package_snapshot' => 'array',
+            'payment_instructions' => 'array',
+        ];
     }
 
     public function customer(): BelongsTo
