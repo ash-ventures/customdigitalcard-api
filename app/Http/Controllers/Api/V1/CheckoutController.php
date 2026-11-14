@@ -59,6 +59,12 @@ class CheckoutController extends Controller
         }
         $details = $validated['customer'] ?? [];
         $content = $validated['content'];
+        if (($content['flow'] ?? 'classic') === 'storyboard' && $package->slug === 'starter') {
+            return response()->json([
+                'message' => 'Kad mewah memerlukan pakej Istimewa atau Seri.',
+                'errors' => ['package' => ['Kad mewah memerlukan pakej Istimewa atau Seri.']],
+            ], 422);
+        }
         $email = $details['email'] ?? $user?->email;
 
         $voucher = null;

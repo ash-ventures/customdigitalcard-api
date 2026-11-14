@@ -68,6 +68,7 @@ class InvitationSupport
             "$prefix.storyboard.dock" => ['nullable', 'in:glass,paper,ink'],
             "$prefix.storyboard.monogram" => ['nullable', 'in:initials,letter,none'],
             "$prefix.storyboard.accent" => ['nullable', 'in:design,champagne,rose,sage,bronze,plum'],
+            "$prefix.storyboard.ornamentOpacity" => ['nullable', 'integer', 'between:0,100'],
             "$prefix.storyboard.timeline" => ['nullable', 'in:line,cards'],
             "$prefix.storyboard.motion" => ['nullable', 'boolean'],
             "$prefix.storyboard.showHosts" => ['nullable', 'boolean'],

@@ -261,6 +261,21 @@ class PaymentAndAdminTest extends TestCase
         $this->postJson('/api/v1/checkout', $this->payload(['template' => 'taman-senja']))->assertUnprocessable();
     }
 
+    public function test_luxury_flow_requires_special_or_premium_package(): void
+    {
+        $this->postJson('/api/v1/checkout', $this->payload([
+            'content' => ['flow' => 'storyboard'],
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.package.0', 'Kad mewah memerlukan pakej Istimewa atau Seri.');
+
+        $this->fakeBill();
+        $this->postJson('/api/v1/checkout', $this->payload([
+            'package' => 'premium',
+            'content' => ['flow' => 'storyboard'],
+        ]))->assertCreated();
+    }
+
     public function test_gateway_error_marks_order_failed(): void
     {
         config([
