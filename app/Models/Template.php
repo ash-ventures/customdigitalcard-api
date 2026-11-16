@@ -68,6 +68,7 @@ class Template extends Model
             'text_tone' => $this->configuration['text_tone'] ?? null,
             'accent_color' => $this->configuration['accent_color'] ?? null,
             'background_url' => $this->backgroundUrl(),
+            'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
 }

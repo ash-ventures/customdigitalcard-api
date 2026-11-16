@@ -108,6 +108,7 @@ class InvitationApiTest extends TestCase
                     'motion' => false,
                     'showPrayer' => false,
                 ],
+                'design' => ['galleryScale' => 120, 'pageText' => ['gift' => 110]],
             ],
         ])->assertCreated()
             ->assertJsonPath('data.content.flow', 'storyboard')
@@ -119,6 +120,8 @@ class InvitationApiTest extends TestCase
             ->assertJsonPath('data.content.storyboard.timeline', 'cards')
             ->assertJsonPath('data.content.storyboard.motion', false)
             ->assertJsonPath('data.content.storyboard.showPrayer', false)
+            ->assertJsonPath('data.content.design.galleryScale', 120)
+            ->assertJsonPath('data.content.design.pageText.gift', 110)
             ->json('data.id');
 
         foreach ([
@@ -128,6 +131,44 @@ class InvitationApiTest extends TestCase
             ['storyboard' => ['timeline' => 'zigzag']],
             ['storyboard' => ['monogram' => 'signature']],
             ['hostsLine' => str_repeat('a', 200)],
+            ['design' => ['galleryScale' => 200]],
+            ['design' => ['pageText' => ['gift' => 400]]],
+        ] as $bad) {
+            $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => $bad])->assertUnprocessable();
+        }
+    }
+
+    public function test_gift_accounts_gift_list_and_gallery_are_validated_and_stored(): void
+    {
+        $owner = User::factory()->create();
+        $png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==';
+
+        $id = $this->actingAs($owner)->postJson('/api/v1/me/invitations', [
+            'template' => 'seri-kasih',
+            'content' => [
+                'bride' => 'Alya',
+                'groom' => 'Hakim',
+                'donationNote' => 'Terima kasih untuk salam kaut digital',
+                'giftAccounts' => [
+                    ['id' => 'a1', 'bank' => 'Maybank', 'accountNumber' => '1234567890', 'accountName' => 'Alya', 'qr' => $png],
+                    ['id' => 'a2', 'bank' => "Touch 'n Go eWallet", 'accountNumber' => '0123456789'],
+                ],
+                'giftItems' => [
+                    ['id' => 'g1', 'title' => 'Coffee Machine', 'url' => 'https://example.com/coffee', 'price' => 'RM 199', 'image' => $png],
+                ],
+                'galleryPhotos' => [$png, $png],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('data.content.giftAccounts.0.bank', 'Maybank')
+            ->assertJsonPath('data.content.giftAccounts.1.accountNumber', '0123456789')
+            ->assertJsonPath('data.content.giftItems.0.title', 'Coffee Machine')
+            ->assertJsonCount(2, 'data.content.galleryPhotos')
+            ->json('data.id');
+
+        foreach ([
+            ['giftItems' => [['title' => 'Bad link', 'url' => 'http://example.com/x']]],
+            ['giftAccounts' => [['bank' => 'Maybank', 'qr' => 'https://example.com/qr.png']]],
+            ['galleryPhotos' => [$png, $png, $png, $png, $png, $png]],
         ] as $bad) {
             $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => $bad])->assertUnprocessable();
         }
