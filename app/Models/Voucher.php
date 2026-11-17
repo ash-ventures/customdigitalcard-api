@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Voucher extends Model
@@ -12,7 +13,7 @@ class Voucher extends Model
 
     protected $fillable = [
         'code', 'description', 'type', 'value', 'min_amount_sen', 'max_discount_sen', 'usage_limit',
-        'per_customer_limit', 'package_slug', 'starts_at', 'expires_at', 'is_active',
+        'per_customer_limit', 'package_slug', 'vendor_id', 'starts_at', 'expires_at', 'is_active',
     ];
 
     protected function casts(): array
@@ -30,11 +31,21 @@ class Voucher extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
+    }
+
     /** Orders that count against the limits: paid, or pending and recent (reserved). */
-    public function redemptions()
+    public function redemptionOrders(): HasMany
     {
         return $this->orders()->where(fn ($q) => $q->where('status', 'paid')
             ->orWhere(fn ($p) => $p->where('status', 'pending')->where('created_at', '>', now()->subHour())));
+    }
+
+    public function redemptions(): HasMany
+    {
+        return $this->redemptionOrders();
     }
 
     /**

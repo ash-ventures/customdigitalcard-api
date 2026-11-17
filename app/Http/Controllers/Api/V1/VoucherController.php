@@ -19,7 +19,7 @@ class VoucherController extends Controller
             'email' => ['nullable', 'email'],
         ]);
         $package = Package::where('slug', $data['package'])->firstOrFail();
-        $voucher = Voucher::where('code', Voucher::normalise($data['code']))->first();
+        $voucher = Voucher::with('vendor')->where('code', Voucher::normalise($data['code']))->first();
         $email = $data['email'] ?? auth('sanctum')->user()?->email;
 
         try {
@@ -34,15 +34,21 @@ class VoucherController extends Controller
         return response()->json(['data' => [
             'code' => $voucher->code,
             'description' => $voucher->description,
+            'vendor' => $voucher->vendor?->only(['code', 'name']),
             'subtotal_sen' => (int) $package->price_sen,
             'discount_sen' => $result['discount_sen'],
             'total_sen' => $result['total_sen'],
         ]]);
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $vouchers = Voucher::query()->latest()->get()->map(fn (Voucher $v) => $this->row($v));
+        $vouchers = Voucher::query()
+            ->with('vendor')
+            ->when($request->filled('vendor'), fn ($q) => $q->where('vendor_id', $request->integer('vendor')))
+            ->latest()
+            ->get()
+            ->map(fn (Voucher $v) => $this->row($v));
 
         return response()->json(['data' => $vouchers]);
     }
@@ -94,6 +100,7 @@ class VoucherController extends Controller
             'usage_limit' => ['nullable', 'integer', 'min:1'],
             'per_customer_limit' => ['nullable', 'integer', 'min:1'],
             'package_slug' => ['nullable', 'exists:packages,slug'],
+            'vendor_id' => ['nullable', 'integer', 'exists:vendors,id'],
             'starts_at' => ['nullable', 'date'],
             'expires_at' => ['nullable', 'date', 'after:starts_at'],
             'is_active' => ['boolean'],
@@ -107,7 +114,8 @@ class VoucherController extends Controller
     {
         return [
             ...$v->only(['id', 'code', 'description', 'type', 'value', 'min_amount_sen', 'max_discount_sen',
-                'usage_limit', 'per_customer_limit', 'package_slug', 'is_active']),
+                'usage_limit', 'per_customer_limit', 'package_slug', 'vendor_id', 'is_active']),
+            'vendor' => $v->vendor?->only(['id', 'code', 'name']),
             'starts_at' => $v->starts_at?->toIso8601String(),
             'expires_at' => $v->expires_at?->toIso8601String(),
             'used_count' => $v->redemptions()->count(),

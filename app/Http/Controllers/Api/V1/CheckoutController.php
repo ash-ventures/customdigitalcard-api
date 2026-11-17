@@ -71,7 +71,7 @@ class CheckoutController extends Controller
         $discount = 0;
         $total = (int) $package->price_sen;
         if (filled($validated['voucher_code'] ?? null)) {
-            $voucher = Voucher::where('code', Voucher::normalise($validated['voucher_code']))->first();
+            $voucher = Voucher::with('vendor')->where('code', Voucher::normalise($validated['voucher_code']))->first();
             try {
                 if (! $voucher) {
                     throw new \InvalidArgumentException('Kod baucar tidak sah.');
@@ -149,6 +149,8 @@ class CheckoutController extends Controller
                 'reference' => 'JK-'.Str::upper(Str::random(12)),
                 'voucher_id' => $voucher?->id,
                 'voucher_code' => $voucher?->code,
+                'vendor_id' => $voucher?->vendor_id,
+                'vendor_code' => $voucher?->vendor?->code,
                 'subtotal_sen' => $package->price_sen,
                 'discount_sen' => $discount,
                 'amount_sen' => $total,
@@ -228,6 +230,9 @@ class CheckoutController extends Controller
             'amount_sen' => $order->amount_sen,
             'discount_sen' => (int) $order->discount_sen,
             'voucher_code' => $order->voucher_code,
+            'vendor' => $order->vendor_code
+                ? ['code' => $order->vendor_code, 'name' => $order->vendor?->name]
+                : null,
             'package' => $order->package->only(['slug', 'name']),
             'paid_at' => $order->paid_at,
             'payment_url' => $order->status === 'pending' ? $order->payment_url : null,

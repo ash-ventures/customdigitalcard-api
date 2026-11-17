@@ -15,6 +15,8 @@ class Order extends Model
         'package_snapshot',
         'voucher_id',
         'voucher_code',
+        'vendor_id',
+        'vendor_code',
         'subtotal_sen',
         'discount_sen',
         'reference',
@@ -60,5 +62,10 @@ class Order extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
     }
 }

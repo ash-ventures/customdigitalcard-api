@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Invitation;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Vendor;
 use App\Services\OrderPaymentService;
 use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,9 @@ class AdminController extends Controller
             'orders_pending' => Order::where('status', 'pending')->count(),
             'revenue_sen' => (int) (clone $paid)->sum('amount_sen'),
             'revenue_30d_sen' => (int) (clone $paid)->where('paid_at', '>=', now()->subDays(30))->sum('amount_sen'),
+            'vendors_total' => Vendor::count(),
+            'vendor_orders_paid' => (clone $paid)->whereNotNull('vendor_code')->count(),
+            'vendor_revenue_sen' => (int) (clone $paid)->whereNotNull('vendor_code')->sum('amount_sen'),
             'recent_orders' => $this->orderQuery()->latest('id')->limit(5)->get()->map(fn (Order $o) => $this->orderRow($o))->values(),
         ]]);
     }
@@ -187,7 +191,7 @@ class AdminController extends Controller
 
     private function orderQuery()
     {
-        return Order::query()->with(['customer:id,full_name,email,phone', 'package:id,slug,name', 'invitation:id,slug,status,content,template_id', 'invitation.template:id,name']);
+        return Order::query()->with(['customer:id,full_name,email,phone', 'package:id,slug,name', 'vendor:id,code,name', 'invitation:id,slug,status,content,template_id', 'invitation.template:id,name']);
     }
 
     private function customerRow(Customer $c): array
@@ -220,6 +224,8 @@ class AdminController extends Controller
             'amount_sen' => $o->amount_sen,
             'discount_sen' => (int) $o->discount_sen,
             'voucher_code' => $o->voucher_code,
+            'vendor_code' => $o->vendor_code,
+            'vendor' => $o->vendor?->only(['id', 'code', 'name']),
             'package' => $o->package?->only(['slug', 'name']),
             'customer' => $o->customer?->only(['id', 'full_name', 'email', 'phone']),
             'invitation' => $o->invitation ? [

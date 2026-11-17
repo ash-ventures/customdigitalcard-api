@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\PackageAdminController;
 use App\Http\Controllers\Api\V1\PaymentCallbackController;
 use App\Http\Controllers\Api\V1\PaymentSettingsController;
 use App\Http\Controllers\Api\V1\RsvpController;
+use App\Http\Controllers\Api\V1\VendorController;
 use App\Http\Controllers\Api\V1\VoucherController;
 use App\Http\Controllers\Api\V1\WishController;
 use Illuminate\Support\Facades\Route;
@@ -71,6 +72,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/packages', [PackageAdminController::class, 'index']);
             Route::put('/packages/{package}', [PackageAdminController::class, 'update']);
             Route::get('/vouchers', [VoucherController::class, 'index']);
+            Route::get('/vendors', [VendorController::class, 'index']);
+            Route::post('/vendors', [VendorController::class, 'store']);
+            Route::put('/vendors/{vendor}', [VendorController::class, 'update']);
+            Route::delete('/vendors/{vendor}', [VendorController::class, 'destroy']);
             Route::get('/card-designs', [CardDesignController::class, 'index']);
             Route::post('/card-designs', [CardDesignController::class, 'store']);
             Route::put('/card-designs/reorder', [CardDesignController::class, 'reorder']);
