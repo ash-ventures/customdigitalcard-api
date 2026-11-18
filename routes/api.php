@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\PackageAdminController;
 use App\Http\Controllers\Api\V1\PaymentCallbackController;
 use App\Http\Controllers\Api\V1\PaymentSettingsController;
 use App\Http\Controllers\Api\V1\RsvpController;
+use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\VendorController;
 use App\Http\Controllers\Api\V1\VoucherController;
 use App\Http\Controllers\Api\V1\WishController;
@@ -50,6 +51,12 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
     Route::post('/admin/auth/login', [AuthController::class, 'adminLogin'])->middleware('throttle:5,1');
+
+    Route::get('/auth/social/providers', [SocialAuthController::class, 'providers']);
+    Route::get('/auth/social/{provider}/redirect', [SocialAuthController::class, 'redirect'])->middleware('throttle:20,1');
+    // Google answers with a redirect; there is no session cookie to read, so state travels in the cache.
+    Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'callback'])->middleware('throttle:20,1');
+    Route::post('/auth/social/exchange', [SocialAuthController::class, 'exchange'])->middleware('throttle:20,1');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/user', [AuthController::class, 'user']);

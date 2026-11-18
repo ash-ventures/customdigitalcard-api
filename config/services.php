@@ -55,6 +55,17 @@ return [
         'chat_id' => env('TELEGRAM_CHAT_ID'),
     ],
 
+    'social' => [
+        'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+    ],
+
+    // Sign in with Google. The callback URI must point at this API, not at the web app.
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
