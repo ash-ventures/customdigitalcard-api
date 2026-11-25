@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\MeInvitationController;
 use App\Http\Controllers\Api\V1\PackageAdminController;
 use App\Http\Controllers\Api\V1\PaymentCallbackController;
 use App\Http\Controllers\Api\V1\PaymentSettingsController;
+use App\Http\Controllers\Api\V1\PhotobookController;
 use App\Http\Controllers\Api\V1\RsvpController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\VendorController;
@@ -37,6 +38,19 @@ Route::prefix('v1')->group(function () {
         ->where('slug', '[a-z0-9-]+');
     Route::post('/invitations/public/{slug}/wishes', [WishController::class, 'store'])
         ->middleware('throttle:8,1')
+        ->where('slug', '[a-z0-9-]+');
+    Route::get('/invitations/public/{slug}/photobook', [PhotobookController::class, 'index'])
+        ->middleware('throttle:60,1')
+        ->where('slug', '[a-z0-9-]+');
+    Route::post('/invitations/public/{slug}/photobook', [PhotobookController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->where('slug', '[a-z0-9-]+');
+    Route::get('/invitations/public/{slug}/photobook/photos/{photo}/image', [PhotobookController::class, 'image'])
+        ->whereNumber('photo')
+        ->where('slug', '[a-z0-9-]+');
+    Route::post('/invitations/public/{slug}/photobook/photos/{photo}/like', [PhotobookController::class, 'toggleLike'])
+        ->middleware('throttle:30,1')
+        ->whereNumber('photo')
         ->where('slug', '[a-z0-9-]+');
 
     Route::post('/vouchers/validate', [VoucherController::class, 'validateCode'])->middleware('throttle:20,1');

@@ -629,6 +629,32 @@ class PaymentAndAdminTest extends TestCase
             ->assertJsonPath('data.0.has_couple_photo', true);
     }
 
+    public function test_admin_orders_include_the_live_photobook_url_only_for_published_seri_cards(): void
+    {
+        $reference = $this->checkout(['package' => 'premium-plus']);
+        $this->billPaid = true;
+        $this->billAmount = 6900;
+        $this->getJson("/api/v1/orders/{$reference}")->assertOk()->assertJsonPath('data.status', 'paid');
+
+        $invitation = Invitation::firstOrFail();
+        $this->assertTrue($invitation->photobook_enabled);
+        $this->assertSame('published', $invitation->status);
+
+        $admin = User::factory()->create();
+        $admin->forceFill(['is_admin' => true])->save();
+        $this->actingAs($admin)->getJson('/api/v1/admin/orders?status=paid')
+            ->assertOk()
+            ->assertJsonPath('data.0.invitation.photobook_path', "/photobook/{$invitation->slug}");
+
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}/photobook")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $invitation->update(['photobook_enabled' => false]);
+        $this->actingAs($admin)->getJson('/api/v1/admin/orders?status=paid')
+            ->assertJsonPath('data.0.invitation.photobook_path', null);
+    }
+
     public function test_customer_csv_export_neutralises_formulas_and_respects_consent(): void
     {
         Customer::capture('=cmd|calc', 'evil@example.test', '0123456789', true, 'checkout');
@@ -688,7 +714,7 @@ class PaymentAndAdminTest extends TestCase
         $changes = [
             'name' => 'Custom', 'price_sen' => 2750, 'features' => ['Online invitation', 'Guestbook'],
             'validity_days_after_event' => 60, 'rsvp_enabled' => true, 'guestbook_enabled' => false,
-            'premium_templates' => true, 'is_active' => true, 'sort_order' => 1,
+            'premium_templates' => true, 'photobook_enabled' => false, 'is_active' => true, 'sort_order' => 1,
         ];
         $url = "/api/v1/admin/packages/{$package->id}";
         $this->putJson($url, $changes)->assertUnauthorized();

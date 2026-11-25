@@ -71,6 +71,7 @@ class InvitationSupport
             "$prefix.showCountdown" => ['nullable', 'boolean'],
             "$prefix.showWishes" => ['nullable', 'boolean'],
             "$prefix.showCalendar" => ['nullable', 'boolean'],
+            "$prefix.photobookEnabled" => ['nullable', 'boolean'],
             "$prefix.showOpeningLine" => ['nullable', 'boolean'],
             "$prefix.openingLineMs" => ['nullable', 'string', 'max:120'],
             "$prefix.openingLineEn" => ['nullable', 'string', 'max:120'],
@@ -81,7 +82,7 @@ class InvitationSupport
             "$prefix.prayerText" => ['nullable', 'string', 'max:400'],
             "$prefix.venueNote" => ['nullable', 'string', 'max:200'],
             "$prefix.storyboard" => ['nullable', 'array'],
-            "$prefix.storyboard.cover" => ['nullable', 'in:split,curtain,fade'],
+            "$prefix.storyboard.cover" => ['nullable', 'in:split,curtain,fade,book,iris,portal,cinematic'],
             "$prefix.storyboard.hero" => ['nullable', 'in:arch,crest,minimal'],
             "$prefix.storyboard.petals" => ['nullable', 'in:off,soft,lush'],
             "$prefix.storyboard.dock" => ['nullable', 'in:glass,paper,ink'],
@@ -113,6 +114,7 @@ class InvitationSupport
             "$prefix.design.pageText.home" => ['nullable', 'integer', 'between:80,130'],
             "$prefix.design.pageText.events" => ['nullable', 'integer', 'between:80,130'],
             "$prefix.design.pageText.wishes" => ['nullable', 'integer', 'between:80,130'],
+            "$prefix.design.pageText.photobook" => ['nullable', 'integer', 'between:80,130'],
             "$prefix.design.pageText.gift" => ['nullable', 'integer', 'between:80,130'],
             "$prefix.design.pageText.contact" => ['nullable', 'integer', 'between:80,130'],
             "$prefix.design.photoScale" => ['nullable', 'integer', 'between:60,140'],
@@ -195,6 +197,19 @@ class InvitationSupport
         // Friendly URL. The slug ends with a random string, so cards cannot be guessed or enumerated.
         // Old links (/i/{slug}) are redirected by the frontend (next.config.ts).
         return $invitation->status === 'published' ? '/jemputan/'.$invitation->slug : null;
+    }
+
+    public static function photobookPath(Invitation $invitation): ?string
+    {
+        if (
+            $invitation->status !== 'published'
+            || ! $invitation->photobook_enabled
+            || ($invitation->expires_at && $invitation->expires_at->isPast())
+        ) {
+            return null;
+        }
+
+        return '/photobook/'.$invitation->slug;
     }
 
     public static function supportPath(Invitation $invitation): ?string

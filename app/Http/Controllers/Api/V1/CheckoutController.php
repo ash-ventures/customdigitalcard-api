@@ -126,6 +126,7 @@ class CheckoutController extends Controller
                 'content' => $content,
                 'rsvp_enabled' => false,
                 'rsvp_deadline' => InvitationSupport::rsvpDeadline($content['rsvpDeadline'] ?? null),
+                'photobook_enabled' => (bool) $package->photobook_enabled,
             ];
 
             if ($invitation) {
@@ -145,7 +146,7 @@ class CheckoutController extends Controller
                 'customer_id' => $customer->id,
                 'invitation_id' => $invitation->id,
                 'package_id' => $package->id,
-                'package_snapshot' => $package->only(['name', 'price_sen', 'currency', 'validity_days_after_event', 'features', 'rsvp_enabled', 'guestbook_enabled', 'premium_templates']),
+                'package_snapshot' => $package->only(['name', 'price_sen', 'currency', 'validity_days_after_event', 'features', 'rsvp_enabled', 'guestbook_enabled', 'photobook_enabled', 'premium_templates']),
                 'reference' => 'JK-'.Str::upper(Str::random(12)),
                 'voucher_id' => $voucher?->id,
                 'voucher_code' => $voucher?->code,

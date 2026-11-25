@@ -24,6 +24,7 @@ class PackageAdminController extends Controller
             'validity_days_after_event' => ['required', 'integer', 'between:0,65535'],
             'rsvp_enabled' => ['required', 'boolean'],
             'guestbook_enabled' => ['required', 'boolean'],
+            'photobook_enabled' => ['required', 'boolean'],
             'premium_templates' => ['required', 'boolean'],
             'is_active' => ['required', 'boolean'],
             'sort_order' => ['required', 'integer', 'between:0,65535'],

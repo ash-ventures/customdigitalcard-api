@@ -191,7 +191,7 @@ class AdminController extends Controller
 
     private function orderQuery()
     {
-        return Order::query()->with(['customer:id,full_name,email,phone', 'package:id,slug,name', 'vendor:id,code,name', 'invitation:id,slug,status,content,template_id', 'invitation.template:id,name']);
+        return Order::query()->with(['customer:id,full_name,email,phone', 'package:id,slug,name', 'vendor:id,code,name', 'invitation:id,slug,status,content,template_id,photobook_enabled,expires_at', 'invitation.template:id,name']);
     }
 
     private function customerRow(Customer $c): array
@@ -235,6 +235,7 @@ class AdminController extends Controller
                 'title' => InvitationSupport::title($o->invitation),
                 'template_name' => $o->invitation->template?->name,
                 'public_path' => InvitationSupport::publicPath($o->invitation),
+                'photobook_path' => InvitationSupport::photobookPath($o->invitation),
                 'support_path' => InvitationSupport::supportPath($o->invitation),
             ] : null,
             'provider_reference' => $o->provider_reference,

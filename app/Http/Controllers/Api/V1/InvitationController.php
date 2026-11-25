@@ -30,6 +30,7 @@ class InvitationController extends Controller
                 'content' => $invitation->content,
                 'rsvp_enabled' => ! $supportPreview && $invitation->rsvp_enabled,
                 'guestbook_enabled' => ! $supportPreview && $invitation->guestbook_enabled,
+                'photobook_enabled' => ! $supportPreview && $invitation->photobook_enabled && ($invitation->content['photobookEnabled'] ?? true),
                 'rsvp_deadline' => $invitation->rsvp_deadline,
                 'expires_at' => $invitation->expires_at,
                 'support_preview' => $supportPreview,

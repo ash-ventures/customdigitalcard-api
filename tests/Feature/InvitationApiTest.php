@@ -6,6 +6,7 @@ use App\Models\Invitation;
 use App\Models\Template;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -123,6 +124,10 @@ class InvitationApiTest extends TestCase
             ->assertJsonPath('data.content.design.galleryScale', 120)
             ->assertJsonPath('data.content.design.pageText.gift', 110)
             ->json('data.id');
+
+        $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", [
+            'content' => ['bride' => 'Alya', 'storyboard' => ['cover' => 'iris']],
+        ])->assertOk()->assertJsonPath('data.content.storyboard.cover', 'iris');
 
         foreach ([
             ['flow' => 'cinema'],
@@ -245,6 +250,35 @@ class InvitationApiTest extends TestCase
         $this->actingAs(User::factory()->create())->getJson("/api/v1/me/invitations/{$invitation->id}/rsvps")->assertNotFound();
     }
 
+    public function test_photobook_publish_lists_and_likes_once(): void
+    {
+        Storage::fake('public');
+        $invitation = $this->createInvitation('published');
+        $png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==';
+
+        $created = $this->postJson("/api/v1/invitations/public/{$invitation->slug}/photobook", [
+            'sender_name' => 'Aina',
+            'relationship' => 'Sahabat Pengantin',
+            'note' => 'Selamat bernikah!',
+            'image' => $png,
+        ])->assertCreated()->assertJsonPath('data.sender_name', 'Aina');
+
+        $photoId = $created->json('data.id');
+        $fingerprint = str_repeat('a', 64);
+        $this->postJson("/api/v1/invitations/public/{$invitation->slug}/photobook/photos/{$photoId}/like", [
+            'fingerprint' => $fingerprint,
+        ])->assertOk()->assertJsonPath('data.liked', true)->assertJsonPath('data.likes_count', 1);
+        $this->postJson("/api/v1/invitations/public/{$invitation->slug}/photobook/photos/{$photoId}/like", [
+            'fingerprint' => $fingerprint,
+        ])->assertOk()->assertJsonPath('data.liked', false)->assertJsonPath('data.likes_count', 0);
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}/photobook")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('meta.current_page', 1);
+        $this->assertDatabaseCount('photobook_photos', 1);
+    }
+
     private function createInvitation(string $status): Invitation
     {
         return Invitation::create([
@@ -253,6 +287,7 @@ class InvitationApiTest extends TestCase
             'slug' => 'alya-hakim-'.Str::lower(Str::random(5)),
             'status' => $status,
             'content' => ['bride' => 'Alya', 'groom' => 'Hakim'],
+            'photobook_enabled' => true,
         ]);
     }
 }

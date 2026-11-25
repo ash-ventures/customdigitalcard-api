@@ -18,6 +18,7 @@ class Invitation extends Model
         'content',
         'rsvp_enabled',
         'guestbook_enabled',
+        'photobook_enabled',
         'rsvp_deadline',
         'published_at',
         'expires_at',
@@ -29,6 +30,7 @@ class Invitation extends Model
             'content' => 'array',
             'rsvp_enabled' => 'boolean',
             'guestbook_enabled' => 'boolean',
+            'photobook_enabled' => 'boolean',
             'rsvp_deadline' => 'datetime',
             'published_at' => 'datetime',
             'expires_at' => 'datetime',
@@ -68,5 +70,10 @@ class Invitation extends Model
     public function rsvpResponses(): HasMany
     {
         return $this->hasMany(RsvpResponse::class);
+    }
+
+    public function photobookPhotos(): HasMany
+    {
+        return $this->hasMany(PhotobookPhoto::class);
     }
 }
