@@ -8,6 +8,7 @@ use App\Models\Invitation;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Services\AdminCleanupService;
 use App\Services\OrderPaymentService;
 use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
@@ -122,6 +123,46 @@ class AdminController extends Controller
         $order->refresh()->load(['customer', 'package', 'invitation.template']);
 
         return response()->json(['data' => $this->orderRow($order)]);
+    }
+
+    public function destroyOrder(Order $order, AdminCleanupService $cleanup): JsonResponse
+    {
+        $result = $cleanup->deleteOrder($order);
+
+        return response()->json([
+            'data' => null,
+            'message' => $result['invitation_deleted']
+                ? 'Order deleted together with its card, guest data, and images.'
+                : 'Order deleted. The card stays because it still has other orders.',
+        ]);
+    }
+
+    public function destroyInvitation(Invitation $invitation, AdminCleanupService $cleanup): JsonResponse
+    {
+        $result = $cleanup->deleteInvitation($invitation);
+
+        return response()->json([
+            'data' => null,
+            'message' => sprintf(
+                'Card deleted with %d order(s), its guest replies, wishes, and photobook images.',
+                $result['orders'],
+            ),
+        ]);
+    }
+
+    public function destroyCustomer(Request $request, Customer $customer, AdminCleanupService $cleanup): JsonResponse
+    {
+        $result = $cleanup->deleteCustomer($customer, $request->boolean('delete_account'));
+
+        return response()->json([
+            'data' => null,
+            'message' => sprintf(
+                'Customer deleted with %d order(s) and %d card(s)%s.',
+                $result['orders'],
+                $result['invitations'],
+                $result['account_deleted'] ? ', including the login account' : '',
+            ),
+        ]);
     }
 
     public function invitations(Request $request): JsonResponse

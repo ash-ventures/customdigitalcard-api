@@ -112,12 +112,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/stats', [AdminController::class, 'stats']);
             Route::get('/customers/export', [AdminController::class, 'exportCustomers']);
             Route::get('/customers', [AdminController::class, 'customers']);
+            Route::delete('/customers/{customer}', [AdminController::class, 'destroyCustomer']);
             Route::get('/orders', [AdminController::class, 'orders']);
             Route::get('/orders/{order}', [AdminController::class, 'order']);
+            Route::delete('/orders/{order}', [AdminController::class, 'destroyOrder']);
             Route::post('/orders/{order}/sync', [AdminController::class, 'syncOrder']);
             Route::post('/orders/{order}/confirm-manual-payment', [AdminController::class, 'confirmManualPayment']);
             Route::get('/invitations', [AdminController::class, 'invitations']);
             Route::get('/invitations/{invitation}', [AdminController::class, 'invitation']);
+            Route::delete('/invitations/{invitation}', [AdminController::class, 'destroyInvitation']);
             Route::get('/invitations/{invitation}/responses', [GuestResponseController::class, 'adminIndex']);
             Route::patch('/invitations/{invitation}', [AdminController::class, 'updateInvitation']);
         });
