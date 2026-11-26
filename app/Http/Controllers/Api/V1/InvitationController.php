@@ -14,7 +14,7 @@ class InvitationController extends Controller
     {
         $invitation = Invitation::query()
             ->where('slug', $slug)
-            ->with('template')
+            ->with('template', 'package')
             ->firstOrFail();
 
         $supportPreview = $invitation->status === 'pending_payment'
@@ -24,16 +24,21 @@ class InvitationController extends Controller
 
         abort_unless($published || $supportPreview, 404);
 
+        $entitlements = InvitationSupport::entitlements($invitation);
+
         return response()->json([
             'data' => [
                 'slug' => $invitation->slug,
                 'content' => $invitation->content,
-                'rsvp_enabled' => ! $supportPreview && $invitation->rsvp_enabled,
-                'guestbook_enabled' => ! $supportPreview && $invitation->guestbook_enabled,
-                'photobook_enabled' => ! $supportPreview && $invitation->photobook_enabled && ($invitation->content['photobookEnabled'] ?? true),
+                'rsvp_enabled' => ! $supportPreview && $entitlements['rsvp'],
+                'guestbook_enabled' => ! $supportPreview && $entitlements['guestbook'],
+                'photobook_enabled' => ! $supportPreview
+                    && $entitlements['photobook']
+                    && ($invitation->content['photobookEnabled'] ?? true),
                 'rsvp_deadline' => $invitation->rsvp_deadline,
                 'expires_at' => $invitation->expires_at,
                 'support_preview' => $supportPreview,
+                'package' => $invitation->package?->only(['slug', 'name']),
                 'template' => $invitation->template->toCatalog(),
             ],
         ]);

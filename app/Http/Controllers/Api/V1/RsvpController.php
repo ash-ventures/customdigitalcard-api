@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Invitation;
 use App\Models\RsvpResponse;
+use App\Support\InvitationSupport;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,21 +29,23 @@ class RsvpController extends Controller
         $invitation = Invitation::query()
             ->where('slug', $slug)
             ->where('status', 'published')
-            ->where('rsvp_enabled', true)
+            ->with('package')
             ->where(function ($query) {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
             ->firstOrFail();
 
+        abort_unless(InvitationSupport::entitlements($invitation)['rsvp'], 404);
+
         if ($invitation->rsvp_deadline?->isPast()) {
-            return response()->json(['message' => 'The RSVP deadline has passed.'], 422);
+            return response()->json(['message' => 'Tempoh pengesahan kehadiran telah tamat. Sila hubungi tuan rumah untuk sebarang pertanyaan.'], 422);
         }
 
         $events = collect($invitation->content['schedule'] ?? [])
             ->filter(fn ($event) => is_array($event) && ($event['rsvpEnabled'] ?? true) && filled($event['title'] ?? null))
             ->pluck('title');
         if (filled($validated['event_title'] ?? null) && ! $events->contains($validated['event_title'])) {
-            return response()->json(['message' => 'The selected event is not available for RSVP.'], 422);
+            return response()->json(['message' => 'Sesi majlis yang dipilih tidak tersedia untuk pengesahan kehadiran.'], 422);
         }
 
         try {
@@ -54,10 +57,10 @@ class RsvpController extends Controller
                 ->first();
 
             if ($response) {
-                return response()->json(['message' => 'RSVP already received.', 'data' => ['id' => $response->id]]);
+                return response()->json(['message' => 'Pengesahan kehadiran telah diterima.', 'data' => ['id' => $response->id]]);
             }
 
-            return response()->json(['message' => 'The RSVP could not be saved.'], 409);
+            return response()->json(['message' => 'Pengesahan kehadiran tidak dapat disimpan. Sila cuba lagi.'], 409);
         }
 
         return response()->json([

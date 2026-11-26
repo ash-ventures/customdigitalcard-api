@@ -46,23 +46,52 @@ class CheckoutController extends Controller
         $package = Package::where('slug', $validated['package'])->where('is_active', true)->first();
 
         if (! $template || ! $package) {
-            return response()->json(['message' => 'Tema atau pakej tidak tersedia.'], 422);
+            return response()->json([
+                'message' => 'Tema atau pakej yang dipilih tidak lagi tersedia. Sila muat semula halaman dan pilih semula.',
+                'errors' => ['package' => ['Tema atau pakej yang dipilih tidak lagi tersedia. Sila muat semula halaman dan pilih semula.']],
+                'error_code' => 'package_unavailable',
+            ], 422);
         }
         if (isset($validated['package_version']) && ! hash_equals($package->catalogVersion(), $validated['package_version'])) {
-            return response()->json(['message' => 'This package has changed. Please refresh the page and review the current price and benefits.'], 422);
+            return response()->json([
+                'message' => 'Harga atau ciri pakej ini telah dikemas kini. Sila muat semula halaman dan semak semula sebelum membayar.',
+                'errors' => ['package' => ['Harga atau ciri pakej ini telah dikemas kini. Sila muat semula halaman dan semak semula sebelum membayar.']],
+                'error_code' => 'package_changed',
+            ], 422);
         }
         if ($template->is_premium && ! $package->premium_templates) {
             return response()->json([
                 'message' => 'Tema premium memerlukan pakej Istimewa atau Seri.',
                 'errors' => ['package' => ['Tema premium memerlukan pakej Istimewa atau Seri.']],
+                'error_code' => 'premium_template_required',
             ], 422);
         }
         $details = $validated['customer'] ?? [];
         $content = $validated['content'];
+
+        // The features ticked in the editor decide the minimum package: a card that uses a feature
+        // must buy a package that includes it, otherwise the feature would silently disappear.
+        $requiredFeatures = [
+            'photobookEnabled' => ['photobook_enabled', 'Fotobuku Polaroid hanya tersedia dalam pakej Seri. Pilih pakej Seri atau matikan halaman Fotobuku.', 'photobook_requires_seri'],
+            'rsvpEnabled' => ['rsvp_enabled', 'RSVP hanya tersedia dalam pakej Istimewa atau Seri. Pilih pakej tersebut atau matikan RSVP.', 'rsvp_requires_premium'],
+            'showWishes' => ['guestbook_enabled', 'Buku tetamu tidak tersedia dalam pakej ini. Pilih pakej lain atau matikan halaman Ucapan.', 'guestbook_requires_package'],
+        ];
+        foreach ($requiredFeatures as $key => [$column, $message, $code]) {
+            $wanted = $key === 'showWishes' ? ($content[$key] ?? true) : ($content[$key] ?? false);
+            if ($wanted && ! $package->{$column}) {
+                return response()->json([
+                    'message' => $message,
+                    'errors' => ['package' => [$message]],
+                    'error_code' => $code,
+                ], 422);
+            }
+        }
+
         if (($content['flow'] ?? 'classic') === 'storyboard' && $package->slug === 'starter') {
             return response()->json([
                 'message' => 'Kad mewah memerlukan pakej Istimewa atau Seri.',
                 'errors' => ['package' => ['Kad mewah memerlukan pakej Istimewa atau Seri.']],
+                'error_code' => 'luxury_flow_required_package',
             ], 422);
         }
         $email = $details['email'] ?? $user?->email;
@@ -125,6 +154,7 @@ class CheckoutController extends Controller
                 'status' => 'pending_payment',
                 'content' => $content,
                 'rsvp_enabled' => false,
+                'guestbook_enabled' => (bool) $package->guestbook_enabled,
                 'rsvp_deadline' => InvitationSupport::rsvpDeadline($content['rsvpDeadline'] ?? null),
                 'photobook_enabled' => (bool) $package->photobook_enabled,
             ];

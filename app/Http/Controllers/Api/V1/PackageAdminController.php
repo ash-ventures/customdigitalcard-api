@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Package;
+use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +31,14 @@ class PackageAdminController extends Controller
             'sort_order' => ['required', 'integer', 'between:0,65535'],
         ]);
         $package->update($validated);
+
+        // Keep every card on this package aligned with its feature list: enabled here means enabled
+        // on the guest card, disabled here means the card stops offering it.
+        $package->invitations()->with('package')->chunkById(200, function ($invitations): void {
+            foreach ($invitations as $invitation) {
+                InvitationSupport::syncEntitlements($invitation);
+            }
+        });
 
         return response()->json(['data' => $package->refresh()]);
     }

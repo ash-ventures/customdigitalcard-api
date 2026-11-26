@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Invitation;
 use App\Models\PhotobookPhoto;
+use App\Support\InvitationSupport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,7 +17,7 @@ class PhotobookController extends Controller
     public function index(string $slug, Request $request): JsonResponse
     {
         $invitation = $this->published($slug);
-        abort_unless($invitation->photobook_enabled && ($invitation->content['photobookEnabled'] ?? true), 404);
+        abort_unless(InvitationSupport::entitlements($invitation)['photobook'] && ($invitation->content['photobookEnabled'] ?? true), 404);
 
         $page = $invitation->photobookPhotos()
             ->when($request->query('sort') === 'picks', fn ($q) => $q->orderByDesc('is_featured')->orderByDesc('likes_count')->latest('id'))
@@ -37,7 +38,7 @@ class PhotobookController extends Controller
     public function store(Request $request, string $slug): JsonResponse
     {
         $invitation = $this->published($slug);
-        abort_unless($invitation->photobook_enabled && ($invitation->content['photobookEnabled'] ?? true), 404);
+        abort_unless(InvitationSupport::entitlements($invitation)['photobook'] && ($invitation->content['photobookEnabled'] ?? true), 404);
 
         $validated = $request->validate([
             'sender_name' => ['required', 'string', 'max:60'],
@@ -95,7 +96,7 @@ class PhotobookController extends Controller
     public function toggleLike(Request $request, string $slug, PhotobookPhoto $photo): JsonResponse
     {
         $invitation = $this->published($slug);
-        abort_unless($invitation->photobook_enabled && ($invitation->content['photobookEnabled'] ?? true), 404);
+        abort_unless(InvitationSupport::entitlements($invitation)['photobook'] && ($invitation->content['photobookEnabled'] ?? true), 404);
         abort_unless($photo->invitation_id === $invitation->id, 404);
 
         $validated = $request->validate(['fingerprint' => ['required', 'string', 'regex:/^[a-fA-F0-9]{64}$/']]);
@@ -121,6 +122,7 @@ class PhotobookController extends Controller
         return Invitation::query()
             ->where('slug', $slug)
             ->where('status', 'published')
+            ->with('package')
             ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->firstOrFail();
     }

@@ -203,13 +203,54 @@ class InvitationSupport
     {
         if (
             $invitation->status !== 'published'
-            || ! $invitation->photobook_enabled
+            || ! self::entitlements($invitation)['photobook']
             || ($invitation->expires_at && $invitation->expires_at->isPast())
         ) {
             return null;
         }
 
         return '/photobook/'.$invitation->slug;
+    }
+
+    /**
+     * Guest features a card may expose. The purchased package is the source of truth, so a feature
+     * is enabled for every package that includes it and disabled for every package that does not.
+     *
+     * @return array{rsvp: bool, guestbook: bool, photobook: bool}
+     */
+    public static function entitlements(Invitation $invitation): array
+    {
+        $package = $invitation->package;
+
+        if (! $package) {
+            return [
+                'rsvp' => (bool) $invitation->rsvp_enabled,
+                'guestbook' => (bool) $invitation->guestbook_enabled,
+                'photobook' => (bool) $invitation->photobook_enabled,
+            ];
+        }
+
+        $content = $invitation->content ?? [];
+
+        return [
+            'rsvp' => (bool) $package->rsvp_enabled && (bool) ($content['rsvpEnabled'] ?? $invitation->rsvp_enabled),
+            'guestbook' => (bool) $package->guestbook_enabled,
+            'photobook' => (bool) $package->photobook_enabled,
+        ];
+    }
+
+    /** Writes the package's entitlements onto the invitation so stored flags can never drift. */
+    public static function syncEntitlements(Invitation $invitation): Invitation
+    {
+        $flags = self::entitlements($invitation);
+
+        $invitation->forceFill([
+            'rsvp_enabled' => $flags['rsvp'],
+            'guestbook_enabled' => $flags['guestbook'],
+            'photobook_enabled' => $flags['photobook'],
+        ])->save();
+
+        return $invitation;
     }
 
     public static function supportPath(Invitation $invitation): ?string

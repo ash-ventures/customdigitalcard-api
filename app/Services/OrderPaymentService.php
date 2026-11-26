@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Services\Billplz\BillplzClient;
 use App\Services\Chip\ChipClient;
+use App\Support\InvitationSupport;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -261,9 +262,10 @@ class OrderPaymentService
             'package_id' => $package->id,
             'published_at' => $invitation->published_at ?? now(),
             'expires_at' => $expires,
-            'rsvp_enabled' => (bool) ($invitation->content['rsvpEnabled'] ?? false) && $benefits['rsvp_enabled'],
-            'guestbook_enabled' => (bool) $benefits['guestbook_enabled'],
-            'photobook_enabled' => (bool) ($benefits['photobook_enabled'] ?? $package->photobook_enabled),
         ])->save();
+
+        // Features belong to the package: turning one on enables it for every card on that package,
+        // and turning it off disables it here as well.
+        InvitationSupport::syncEntitlements($invitation->load('package'));
     }
 }

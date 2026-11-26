@@ -62,7 +62,7 @@ class PaymentAndAdminTest extends TestCase
         return array_replace_recursive([
             'template' => 'seri-kasih',
             'package' => 'starter',
-            'content' => ['bride' => 'Alya', 'groom' => 'Hakim', 'date' => now()->addMonth()->toDateString(), 'time' => '11:00', 'rsvpEnabled' => true],
+            'content' => ['bride' => 'Alya', 'groom' => 'Hakim', 'date' => now()->addMonth()->toDateString(), 'time' => '11:00', 'rsvpEnabled' => false],
             'customer' => ['name' => 'Aminah Ali', 'phone' => '012-345 6789', 'email' => 'Aminah@Example.test', 'marketing_consent' => true],
         ], $overrides);
     }
@@ -629,7 +629,7 @@ class PaymentAndAdminTest extends TestCase
             ->assertJsonPath('data.0.has_couple_photo', true);
     }
 
-    public function test_admin_orders_include_the_live_photobook_url_only_for_published_seri_cards(): void
+    public function test_admin_orders_include_the_live_photobook_url_only_for_published_entitled_cards(): void
     {
         $reference = $this->checkout(['package' => 'premium-plus']);
         $invitation = Order::where('reference', $reference)->firstOrFail()->invitation;
@@ -639,6 +639,7 @@ class PaymentAndAdminTest extends TestCase
         $this->getJson("/api/v1/orders/{$reference}")->assertOk()->assertJsonPath('data.status', 'paid');
 
         $invitation->refresh();
+        // Publishing restores the feature from the package rather than keeping a stale flag.
         $this->assertTrue($invitation->photobook_enabled);
         $this->assertSame('published', $invitation->status);
 
@@ -655,9 +656,78 @@ class PaymentAndAdminTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.photobook_enabled', true);
 
-        $invitation->update(['photobook_enabled' => false]);
+        // The package decides the feature, so removing it there removes the Live Wall link.
+        $package = $invitation->package;
+        $this->actingAs($admin)->putJson("/api/v1/admin/packages/{$package->id}", [
+            'name' => $package->name,
+            'price_sen' => $package->price_sen,
+            'features' => $package->features,
+            'validity_days_after_event' => $package->validity_days_after_event,
+            'rsvp_enabled' => $package->rsvp_enabled,
+            'guestbook_enabled' => $package->guestbook_enabled,
+            'photobook_enabled' => false,
+            'premium_templates' => $package->premium_templates,
+            'is_active' => $package->is_active,
+            'sort_order' => $package->sort_order,
+        ])->assertOk();
+
+        $this->assertFalse($invitation->fresh()->photobook_enabled);
         $this->actingAs($admin)->getJson('/api/v1/admin/orders?status=paid')
             ->assertJsonPath('data.0.invitation.photobook_path', null);
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}/photobook")->assertNotFound();
+    }
+
+    public function test_photobook_is_exclusive_to_the_seri_package(): void
+    {
+        $this->assertFalse((bool) Package::where('slug', 'starter')->value('photobook_enabled'));
+        $this->assertFalse((bool) Package::where('slug', 'premium')->value('photobook_enabled'));
+        $this->assertTrue((bool) Package::where('slug', 'premium-plus')->value('photobook_enabled'));
+
+        // Ticking Fotobuku on the card means only Seri can be bought.
+        foreach (['starter', 'premium'] as $slug) {
+            $this->postJson('/api/v1/checkout', $this->payload([
+                'package' => $slug,
+                'content' => ['photobookEnabled' => true],
+            ]))
+                ->assertUnprocessable()
+                ->assertJsonPath('error_code', 'photobook_requires_seri')
+                ->assertJsonPath('errors.package.0', 'Fotobuku Polaroid hanya tersedia dalam pakej Seri. Pilih pakej Seri atau matikan halaman Fotobuku.');
+        }
+
+        $reference = $this->checkout([
+            'package' => 'premium-plus',
+            'content' => ['photobookEnabled' => true],
+        ]);
+        $this->billPaid = true;
+        $this->billAmount = 6900;
+        $this->getJson("/api/v1/orders/{$reference}")->assertOk()->assertJsonPath('data.status', 'paid');
+
+        $invitation = Invitation::firstOrFail();
+        $this->assertSame('premium-plus', $invitation->package->slug);
+        $this->assertTrue($invitation->photobook_enabled);
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}")
+            ->assertOk()
+            ->assertJsonPath('data.photobook_enabled', true)
+            ->assertJsonPath('data.package.slug', 'premium-plus');
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}/photobook")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_rsvp_requires_a_package_that_includes_it(): void
+    {
+        $this->postJson('/api/v1/checkout', $this->payload([
+            'package' => 'starter',
+            'content' => ['rsvpEnabled' => true],
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('error_code', 'rsvp_requires_premium');
+
+        $this->fakeBill();
+        $this->postJson('/api/v1/checkout', $this->payload([
+            'package' => 'premium',
+            'content' => ['rsvpEnabled' => true],
+        ]))->assertCreated();
     }
 
     public function test_seri_entitlement_is_restored_for_classic_and_luxury_cards_when_payment_publishes(): void
@@ -753,7 +823,7 @@ class PaymentAndAdminTest extends TestCase
         $this->assertFalse($package->fresh()->guestbook_enabled);
     }
 
-    public function test_checkout_snapshots_benefits_and_rejects_stale_package_version(): void
+    public function test_checkout_applies_current_package_entitlements_when_publishing(): void
     {
         $package = Package::where('slug', 'starter')->firstOrFail();
         $package->update(['rsvp_enabled' => true, 'guestbook_enabled' => true]);
@@ -761,20 +831,23 @@ class PaymentAndAdminTest extends TestCase
         $reference = $this->checkout(['package_version' => $version]);
         $invitation = Invitation::firstOrFail();
         $package->update(['price_sen' => 2500, 'rsvp_enabled' => false, 'guestbook_enabled' => false, 'validity_days_after_event' => 5]);
-        $this->postJson('/api/v1/checkout', $this->payload(['package_version' => $version]))->assertUnprocessable();
+        $this->postJson('/api/v1/checkout', $this->payload(['package_version' => $version]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.package.0', 'Harga atau ciri pakej ini telah dikemas kini. Sila muat semula halaman dan semak semula sebelum membayar.');
         $this->fakeBill(paid: true);
         $this->getJson("/api/v1/orders/{$reference}")->assertJsonPath('data.status', 'paid');
         $invitation->refresh();
-        $this->assertTrue($invitation->rsvp_enabled);
-        $this->assertTrue($invitation->guestbook_enabled);
+        // The order keeps its purchased validity window; guest features follow the package settings.
+        $this->assertFalse($invitation->rsvp_enabled);
+        $this->assertFalse($invitation->guestbook_enabled);
         $this->assertSame(CarbonImmutable::parse($invitation->content['date'])->addDays(30)->toDateString(), $invitation->expires_at->toDateString());
-        $this->postJson("/api/v1/invitations/public/{$invitation->slug}/wishes", ['name' => 'Guest', 'message' => 'Best wishes'])->assertCreated();
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}/wishes")->assertNotFound();
     }
 
     public function test_guestbook_can_be_disabled_for_future_purchases(): void
     {
         Package::where('slug', 'starter')->update(['guestbook_enabled' => false]);
-        $reference = $this->checkout();
+        $reference = $this->checkout(['content' => ['showWishes' => false]]);
         $this->fakeBill(paid: true);
         $this->getJson("/api/v1/orders/{$reference}")->assertJsonPath('data.status', 'paid');
         $invitation = Invitation::firstOrFail();
