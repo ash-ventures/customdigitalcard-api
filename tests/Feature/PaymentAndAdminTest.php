@@ -632,11 +632,13 @@ class PaymentAndAdminTest extends TestCase
     public function test_admin_orders_include_the_live_photobook_url_only_for_published_seri_cards(): void
     {
         $reference = $this->checkout(['package' => 'premium-plus']);
+        $invitation = Order::where('reference', $reference)->firstOrFail()->invitation;
+        $invitation->update(['photobook_enabled' => false]);
         $this->billPaid = true;
         $this->billAmount = 6900;
         $this->getJson("/api/v1/orders/{$reference}")->assertOk()->assertJsonPath('data.status', 'paid');
 
-        $invitation = Invitation::firstOrFail();
+        $invitation->refresh();
         $this->assertTrue($invitation->photobook_enabled);
         $this->assertSame('published', $invitation->status);
 
@@ -649,10 +651,35 @@ class PaymentAndAdminTest extends TestCase
         $this->getJson("/api/v1/invitations/public/{$invitation->slug}/photobook")
             ->assertOk()
             ->assertJsonCount(0, 'data');
+        $this->getJson("/api/v1/invitations/public/{$invitation->slug}")
+            ->assertOk()
+            ->assertJsonPath('data.photobook_enabled', true);
 
         $invitation->update(['photobook_enabled' => false]);
         $this->actingAs($admin)->getJson('/api/v1/admin/orders?status=paid')
             ->assertJsonPath('data.0.invitation.photobook_path', null);
+    }
+
+    public function test_seri_entitlement_is_restored_for_classic_and_luxury_cards_when_payment_publishes(): void
+    {
+        foreach (['classic', 'storyboard'] as $flow) {
+            $reference = $this->checkout([
+                'package' => 'premium-plus',
+                'content' => ['flow' => $flow],
+            ]);
+            $invitation = Order::where('reference', $reference)->firstOrFail()->invitation;
+            $invitation->update(['photobook_enabled' => false]);
+            $this->billPaid = true;
+            $this->billAmount = 6900;
+
+            $this->getJson("/api/v1/orders/{$reference}")
+                ->assertOk()
+                ->assertJsonPath('data.status', 'paid');
+            $this->getJson("/api/v1/invitations/public/{$invitation->slug}")
+                ->assertOk()
+                ->assertJsonPath('data.content.flow', $flow)
+                ->assertJsonPath('data.photobook_enabled', true);
+        }
     }
 
     public function test_customer_csv_export_neutralises_formulas_and_respects_consent(): void

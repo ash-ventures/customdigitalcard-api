@@ -240,7 +240,12 @@ class OrderPaymentService
     {
         $invitation = $order->invitation()->firstOrFail();
         $package = $order->package()->firstOrFail();
-        $benefits = $order->package_snapshot ?? $package->only(['validity_days_after_event', 'rsvp_enabled', 'guestbook_enabled']);
+        $benefits = $order->package_snapshot ?? $package->only([
+            'validity_days_after_event',
+            'rsvp_enabled',
+            'guestbook_enabled',
+            'photobook_enabled',
+        ]);
         $date = $invitation->content['date'] ?? null;
 
         try {
@@ -258,6 +263,7 @@ class OrderPaymentService
             'expires_at' => $expires,
             'rsvp_enabled' => (bool) ($invitation->content['rsvpEnabled'] ?? false) && $benefits['rsvp_enabled'],
             'guestbook_enabled' => (bool) $benefits['guestbook_enabled'],
+            'photobook_enabled' => (bool) ($benefits['photobook_enabled'] ?? $package->photobook_enabled),
         ])->save();
     }
 }
