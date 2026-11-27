@@ -141,6 +141,39 @@ class InvitationApiTest extends TestCase
         ] as $bad) {
             $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => $bad])->assertUnprocessable();
         }
+
+    }
+
+    public function test_card_display_and_countdown_settings_are_saved_and_validated(): void
+    {
+        $owner = User::factory()->create();
+        $content = [
+            'bride' => 'Alya',
+            'greeting' => 'other',
+            'greetingText' => 'Majlis keluarga',
+            'countdownUnits' => ['hours', 'seconds'],
+            'design' => ['nameFont' => 'monsieur-la-doulaise', 'bodyFont' => 'eb-garamond', 'navFont' => 'cherish', 'dateText' => "19 Disember\n10 Rejab", 'dateScale' => 80, 'eventScale' => 110, 'timeScale' => 90, 'detailsAlign' => 'right'],
+        ];
+        $id = $this->actingAs($owner)->postJson('/api/v1/me/invitations', ['template' => 'mawar-sutra', 'content' => $content])
+            ->assertCreated()
+            ->assertJsonPath('data.content.greetingText', 'Majlis keluarga')
+            ->assertJsonPath('data.content.countdownUnits.1', 'seconds')
+            ->assertJsonPath('data.content.design.dateText', "19 Disember\n10 Rejab")
+            ->assertJsonPath('data.content.design.nameFont', 'monsieur-la-doulaise')
+            ->assertJsonPath('data.content.design.bodyFont', 'eb-garamond')
+            ->assertJsonPath('data.content.design.navFont', 'cherish')
+            ->json('data.id');
+
+        foreach ([
+            ['countdownUnits' => []],
+            ['countdownUnits' => ['days', 'days']],
+            ['countdownUnits' => ['weeks']],
+            ['greeting' => 'unknown'],
+            ['design' => ['dateScale' => 151]],
+            ['design' => ['detailsAlign' => 'justify']],
+        ] as $invalid) {
+            $this->actingAs($owner)->putJson("/api/v1/me/invitations/{$id}", ['content' => array_replace($content, $invalid)])->assertUnprocessable();
+        }
     }
 
     public function test_gift_accounts_gift_list_and_gallery_are_validated_and_stored(): void

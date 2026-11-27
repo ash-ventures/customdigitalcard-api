@@ -69,6 +69,10 @@ class InvitationSupport
             "$prefix.galleryPhotos" => ['nullable', 'array', 'max:5'],
             "$prefix.galleryPhotos.*" => ['nullable', 'string', 'max:1500000', 'regex:/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/'],
             "$prefix.showCountdown" => ['nullable', 'boolean'],
+            "$prefix.countdownUnits" => ['nullable', 'array', 'min:1', 'max:4'],
+            "$prefix.countdownUnits.*" => ['required', 'distinct', 'in:days,hours,minutes,seconds'],
+            "$prefix.greeting" => ['nullable', 'in:kesyukuran,walimatulurus,other,none'],
+            "$prefix.greetingText" => ['nullable', 'string', 'max:120'],
             "$prefix.showWishes" => ['nullable', 'boolean'],
             "$prefix.showCalendar" => ['nullable', 'boolean'],
             "$prefix.photobookEnabled" => ['nullable', 'boolean'],
@@ -105,10 +109,15 @@ class InvitationSupport
             "$prefix.design.textScale" => ['nullable', 'integer', 'between:85,120'],
             "$prefix.design.letterSpacing" => ['nullable', 'numeric', 'between:-1,3'],
             "$prefix.design.textAlign" => ['nullable', 'in:center,left'],
+            "$prefix.design.dateText" => ['nullable', 'string', 'max:240'],
+            "$prefix.design.dateScale" => ['nullable', 'integer', 'between:60,150'],
+            "$prefix.design.eventScale" => ['nullable', 'integer', 'between:60,150'],
+            "$prefix.design.timeScale" => ['nullable', 'integer', 'between:60,150'],
+            "$prefix.design.detailsAlign" => ['nullable', 'in:left,center,right'],
             "$prefix.design.lineHeight" => ['nullable', 'integer', 'between:110,180'],
-            "$prefix.design.bodyFont" => ['nullable', 'in:serif,sans,playfair,cinzel,cormorant,lora,montserrat,josefin'],
+            "$prefix.design.bodyFont" => ['nullable', 'in:'.implode(',', self::BODY_FONTS)],
             "$prefix.design.showFrame" => ['nullable', 'boolean'],
-            "$prefix.design.navFont" => ['nullable', 'in:serif,sans,playfair,cinzel,cormorant,lora,montserrat,josefin,'.implode(',', self::NAME_FONTS)],
+            "$prefix.design.navFont" => ['nullable', 'in:'.implode(',', array_merge(self::BODY_FONTS, self::NAME_FONTS))],
             "$prefix.design.navScale" => ['nullable', 'integer', 'between:80,140'],
             "$prefix.design.pageText" => ['nullable', 'array'],
             "$prefix.design.pageText.home" => ['nullable', 'integer', 'between:80,130'],
@@ -144,9 +153,26 @@ class InvitationSupport
             : null;
     }
 
+    public const BODY_FONTS = [
+        'serif', 'sans', 'playfair', 'cinzel', 'cormorant', 'lora', 'montserrat', 'josefin',
+        'alegreya', 'alice', 'baskervville', 'bodoni-moda', 'cardo', 'cinzel-classic',
+        'crimson-text', 'eb-garamond', 'forum', 'gilda-display', 'libre-baskerville',
+        'marcellus', 'prata', 'spectral', 'tenor-sans', 'trirong',
+    ];
+
     public const NAME_FONTS = [
         'great-vibes', 'italianno', 'sacramento', 'dancing-script', 'cinzel-decorative',
         'allura', 'parisienne', 'pinyon-script', 'alex-brush', 'playfair',
+        'amatic', 'birthstone', 'caveat', 'cookie', 'courgette', 'damion', 'ephesis', 'explora',
+        'fleur', 'handlee', 'kaushan', 'marck', 'merienda', 'mr-haviland', 'mrs-delafield',
+        'niconne', 'norican', 'petit', 'rouge', 'satisfy',
+        'allison', 'arizonia', 'beau-rivage', 'bonheur-royale', 'carattere', 'imperial-script',
+        'lavishly-yours', 'montecarlo', 'tangerine', 'waterfall', 'windsong',
+        'ballet', 'bilbo', 'bilbo-swash', 'bonbon', 'calligraffitti', 'cherish', 'clicker-script',
+        'condiment', 'corinthia', 'dawning', 'delius-swash', 'dr-sugiyama', 'estonia',
+        'euphoria-script', 'felipa', 'fondamento', 'gwendolyn', 'herr-muellerhoff', 'love-light',
+        'mea-culpa', 'my-soul', 'qwigley', 'rochester', 'ruthie', 'stalemate', 'zeyada',
+        'la-belle-aurore', 'mr-dafoe', 'monsieur-la-doulaise', 'whisper',
     ];
 
     public static function draftSlug(): string
